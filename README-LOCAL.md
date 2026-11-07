@@ -24,7 +24,7 @@ was before. `Delay()` / `Timeout()` of `ExecutorRunner` still return whole secon
 `venom run --parallel=N` runs up to N testcases of one testsuite at once. Default 1 is the v1.3.0
 sequential run. Also `VENOM_PARALLEL=N` and `parallel: N` in the venom config file.
 
-- Testsuites still run one after another; the testcases inside a suite run in parallel.
+- Testsuites run one after another unless `--parallel-suites` is set (section 3).
 - Each testcase keeps its own vars and results; results stay at their index, so JUnit/JSON/YAML/TAP
   reports list testcases in file order.
 - Console output of a testcase is buffered and printed whole, in testcase order. `venom.log`
@@ -36,6 +36,24 @@ sequential run. Also `VENOM_PARALLEL=N` and `parallel: N` in the venom config fi
 - `--stop-on-failure` forces a sequential run of the suite.
 - Steps that share an external resource (a file, a database row, a port) are not detected; put
   such testcases in their own suite or keep `--parallel=1`.
+
+## 3. Parallel testsuites: `--parallel-suites=N`
+
+`venom run --parallel-suites=N` runs up to N testsuites (files) of one run at once. Default 1 is the
+v1.3.0 sequential run. Also `VENOM_PARALLEL_SUITES=N` and `parallel_suites: N` in the venom config file.
+
+- Each testsuite keeps its own vars, results and output files; results stay at their index, so
+  the reports list testsuites in file order, and the run counters are added in file order.
+- Console output of a testsuite is buffered and printed whole, in file order.
+- **Shared state rule.** The whole run stays sequential with `--stop-on-failure`, with `-vvv`
+  (CPU profiling is process-wide), or when a testsuite holds `.<testcase name of another
+  testsuite>.`, that is a reference such as `{{.create-user.id}}` to a var named after another
+  suite's testcase. v1.3.0 does not pass vars between testsuites, so such a reference never
+  resolves; the check is conservative.
+- **Effective concurrency.** `--parallel-suites=S --parallel=P` runs up to S testsuites at once and
+  up to P testcases inside each of them: at most S x P testcases at once. Each of the two limits
+  falls back to 1 on its own rule (above and section 2).
+- The first error that stops a testsuite is returned in file order, as a sequential run returns it.
 
 ## Build
 

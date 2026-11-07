@@ -46,12 +46,12 @@ var _ Executor = new(executor)
 type executor struct {
 	Executor
 	name    string
-	retry   int      // nb retry a test case if it is in failure.
-	retryIf []string // retry conditions to check before performing any retries
+	retry   int           // nb retry a test case if it is in failure.
+	retryIf []string      // retry conditions to check before performing any retries
 	delay   time.Duration // delay between two retries
 	timeout time.Duration // timeout on executor
-	info    []string // info to display after the run and before the assertion
-	stype   string   // builtin, plugin, user
+	info    []string      // info to display after the run and before the assertion
+	stype   string        // builtin, plugin, user
 }
 
 func (e executor) Name() string {
