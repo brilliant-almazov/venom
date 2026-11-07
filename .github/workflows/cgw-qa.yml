@@ -1,0 +1,32 @@
+name: cgw-qa
+
+on:
+  push:
+    branches: [feat/parallel-subsecond]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: self-hosted
+    env:
+      DOCKER_CONFIG: ${{ github.workspace }}/.docker-config-${{ github.run_id }}-${{ github.job }}
+      IMAGE: cgw-qa-venom:ci-${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Per-job docker config
+        run: rm -rf "$DOCKER_CONFIG" && mkdir -p "$DOCKER_CONFIG"
+      - name: Package tests (root package with -race, cmd/venom/run)
+        run: docker build -f docker/Dockerfile.cgw-qa --target test .
+      - name: Build the linux binary and image
+        run: docker build -f docker/Dockerfile.cgw-qa --build-arg VENOM_VERSION=${{ github.sha }} -t "$IMAGE" .
+      - name: Smoke
+        run: docker run --rm "$IMAGE" version
+      - name: Clean up
+        if: always()
+        run: |
+          docker image rm -f "$IMAGE" || true
+          rm -rf "$DOCKER_CONFIG"

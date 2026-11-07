@@ -1,0 +1,43 @@
+# Reproducible venom image for cgw-qa, built from this fork's source.
+#
+# From a checkout of this fork:
+#   docker build -f docker/Dockerfile.cgw-qa -t cgw-qa-venom:v1.3.0-local .
+# Package tests of the touched packages only:
+#   docker build -f docker/Dockerfile.cgw-qa --target test .
+# Pinned by commit, without a checkout:
+#   docker build -f docker/Dockerfile.cgw-qa --build-arg VENOM_VERSION=<full sha> -t cgw-qa-venom:<sha> \
+#     https://github.com/brilliant-almazov/venom.git#<full sha>
+
+ARG GO_IMAGE=golang:1.25-alpine
+ARG BASE_IMAGE=alpine:3.21
+
+FROM ${GO_IMAGE} AS builder
+ARG VENOM_VERSION=v1.3.0-local
+ENV CGO_ENABLED=0 GOFLAGS=-mod=mod
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN go build -installsuffix cgo \
+      -ldflags "-X github.com/ovh/venom.Version=${VENOM_VERSION}" \
+      -o /out/venom ./cmd/venom
+
+FROM builder AS test
+# root package (delay, timeout, --parallel) with the race detector
+RUN apk add --no-cache build-base
+RUN CGO_ENABLED=1 go test -race -count=1 .
+# cmd/venom/run links go-sqlite3, whose cgo does not build on musl: test it without cgo
+RUN go test -count=1 ./cmd/venom/run/...
+
+FROM ${BASE_IMAGE}
+# same base as ovhcom/venom:v1.3.0, plus docker-cli
+RUN apk add --no-cache tzdata ca-certificates docker-cli
+COPY --from=builder /out/venom /usr/local/bin/venom
+VOLUME /workdir/results
+VOLUME /workdir/tests
+WORKDIR /workdir
+ENV VENOM_OUTPUT_DIR=/workdir/results \
+    VENOM_LIB_DIR=/workdir/tests/lib \
+    VENOM_VERBOSE=1
+ENTRYPOINT ["/usr/local/bin/venom"]
+CMD ["run", "./tests/*.y*ml"]
