@@ -731,3 +731,15 @@ func TestJSONSeq(t *testing.T) {
 		t.Fatalf("Do: %q %v", out, err)
 	}
 }
+
+func TestTemplateActionsKept(t *testing.T) {
+	in := `m={{if eq .input.kind "frequency"}}F{{else if and (eq .input.kind "position") (eq .p "dfs")}}D{{else}}P{{end}} {{- if ne .input.prio ""}},p{{end}}`
+	out, err := Do(in, map[string]string{"input.kind": "position", "p": "dfs", "input.prio": "5"})
+	if err != nil || out != "m=D,p" {
+		t.Fatalf("got %q %v", out, err)
+	}
+	out, err = Do(`{{.unknown}} {{if eq .k "a"}}A{{end}}`, map[string]string{"k": "a"})
+	if err != nil || out != "{{.unknown}} A" {
+		t.Fatalf("unknown var: %q %v", out, err)
+	}
+}
