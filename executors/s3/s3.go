@@ -7,6 +7,7 @@ package s3
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -21,6 +22,7 @@ import (
 	"github.com/mitchellh/mapstructure"
 
 	"github.com/ovh/venom"
+	"github.com/ovh/venom/executors/evidence"
 	"github.com/ovh/venom/executors/hostsuffix"
 )
 
@@ -47,6 +49,8 @@ type Executor struct {
 	Key        string `json:"key" yaml:"key" mapstructure:"key"`
 	Prefix     string `json:"prefix" yaml:"prefix" mapstructure:"prefix"`
 	MaxKeys    int    `json:"max_keys" yaml:"max_keys" mapstructure:"max_keys"`
+	// OutputFile: the result as JSON is written to <venom.outputdir>/<output_file> (executors/evidence).
+	OutputFile string `json:"output_file" yaml:"output_file" mapstructure:"output_file"`
 }
 
 // Rule is one lifecycle rule.
@@ -69,6 +73,7 @@ type Result struct {
 	RulesCount  int      `json:"rules_count"`
 	Code        string   `json:"code"`
 	Err         string   `json:"err"`
+	OutputFile  string   `json:"output_file,omitempty"`
 }
 
 // ZeroValueResult returns an empty result.
@@ -147,6 +152,14 @@ func (Executor) Run(ctx context.Context, step venom.TestStep) (interface{}, erro
 		r.fail(err, false)
 	default:
 		return nil, fmt.Errorf("s3: action %q is not one of head, get, list, lifecycle", e.Action)
+	}
+	if e.OutputFile != "" {
+		b, _ := json.Marshal(r)
+		file, err := evidence.Write(ctx, e.OutputFile, string(b))
+		if err != nil {
+			return nil, err
+		}
+		r.OutputFile = file
 	}
 	return r, nil
 }
