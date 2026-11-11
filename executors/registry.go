@@ -16,6 +16,7 @@ import (
 	"github.com/ovh/venom/executors/rabbitmq"
 	"github.com/ovh/venom/executors/readfile"
 	"github.com/ovh/venom/executors/redis"
+	"github.com/ovh/venom/executors/s3"
 	"github.com/ovh/venom/executors/smtp"
 	"github.com/ovh/venom/executors/sql"
 	"github.com/ovh/venom/executors/ssh"
@@ -39,6 +40,7 @@ var Registry map[string]Constructor = map[string]Constructor{
 	rabbitmq.Name:   rabbitmq.New,
 	readfile.Name:   readfile.New,
 	redis.Name:      redis.New,
+	s3.Name:         s3.New,
 	smtp.Name:       smtp.New,
 	sql.Name:        sql.New,
 	ssh.Name:        ssh.New,
