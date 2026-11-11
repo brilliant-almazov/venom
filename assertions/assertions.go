@@ -70,6 +70,7 @@ var assertMap = map[string]AssertFunc{
 	"ShouldBeArray":                ShouldBeArray,
 	"ShouldBeMap":                  ShouldBeMap,
 	"ShouldMatchRegex":             ShouldMatchRegex,
+	"ShouldNotMatchRegex":          ShouldNotMatchRegex,
 }
 
 func Get(s string) (AssertFunc, bool) {
@@ -165,6 +166,18 @@ func ShouldMatchRegex(actual interface{}, expected ...interface{}) error {
 		return fmt.Errorf("value %v not matching pattern : %v", actual, expected[0])
 	}
 	return nil
+}
+
+// ShouldNotMatchRegex receives exactly two parameters and passes when the value does not match the regex.
+func ShouldNotMatchRegex(actual interface{}, expected ...interface{}) error {
+	err := ShouldMatchRegex(actual, expected...)
+	if err == nil {
+		return fmt.Errorf("value %v matches pattern : %v", actual, expected[0])
+	}
+	if strings.HasPrefix(err.Error(), "value ") {
+		return nil
+	}
+	return err
 }
 
 // ShouldNotEqual receives exactly two parameters and does an inequality check.
