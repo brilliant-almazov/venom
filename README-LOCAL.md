@@ -69,6 +69,13 @@ barrier and each runs the step without `parallel`. The result keeps the first ca
 
 Point test: `executors/grpc/parallel_test.go`.
 
+## 5. A body cut short on purpose: http `truncate_body: N`
+
+An `http` step with `truncate_body: N` (N > 0) sends the request over its own connection with a `Content-Length` N
+bytes larger than the body, writes the body and closes the write side: the server meets the end of the body before
+the promised length — an error of reading the body. The answer is read and returned as usual (`statuscode`, `body`,
+`headers`). Proxy and unix socket settings are not used on this path. Point test: `executors/http/truncate_test.go`.
+
 ## Build
 
 ```bash

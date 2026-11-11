@@ -58,6 +58,9 @@ type Executor struct {
 	TLSClientCert     string            `json:"tls_client_cert" yaml:"tls_client_cert" mapstructure:"tls_client_cert"`
 	TLSClientKey      string            `json:"tls_client_key" yaml:"tls_client_key" mapstructure:"tls_client_key"`
 	TLSRootCA         string            `json:"tls_root_ca" yaml:"tls_root_ca" mapstructure:"tls_root_ca"`
+	// TruncateBody: N > 0 declares a Content-Length N bytes larger than the body, sends the body and closes the write
+	// side, so the server meets the end of the body early (an error of reading the body); the answer is read as usual.
+	TruncateBody int `json:"truncate_body" yaml:"truncate_body" mapstructure:"truncate_body"`
 }
 
 // Result represents a step result. Json and yaml descriptor are used for json output
@@ -207,7 +210,12 @@ func (Executor) Run(ctx context.Context, step venom.TestStep) (interface{}, erro
 	result.Request.PostForm = cReq.PostForm
 
 	start := time.Now()
-	resp, err := client.Do(req)
+	var resp *http.Response
+	if e.TruncateBody > 0 {
+		resp, err = runTruncated(ctx, req, []byte(result.Request.Body), e.TruncateBody, e.IgnoreVerifySSL)
+	} else {
+		resp, err = client.Do(req)
+	}
 	if err != nil {
 		result.Err = err.Error()
 		return result, err
