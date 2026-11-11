@@ -718,3 +718,16 @@ func TestStringQuote(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, `content is {\"foo\": \"{\\\"bar\\\":\\\"baz\\\"}\"}`, got)
 }
+
+func TestJSONSeq(t *testing.T) {
+	if got := jsonSeq("kw %02d", "3"); got != `["kw 00","kw 01","kw 02"]` {
+		t.Fatalf("jsonSeq: %s", got)
+	}
+	if got := jsonSeq("x", "a"); got != "[]" {
+		t.Fatalf("jsonSeq bad n: %s", got)
+	}
+	out, err := Do(`{{jsonSeq (printf "qa %s %%02d" .c) .n}}`, map[string]string{"c": "B1-01", "n": "2"})
+	if err != nil || out != `["qa B1-01 00","qa B1-01 01"]` {
+		t.Fatalf("Do: %q %v", out, err)
+	}
+}

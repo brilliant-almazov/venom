@@ -63,6 +63,7 @@ func init() {
 		"empty":        empty,
 		"coalesce":     coalesce,
 		"toJSON":       toJSON,
+		"jsonSeq":      jsonSeq,
 		"toPrettyJSON": toPrettyJSON,
 		"b64enc":       base64encode,
 		"b64dec":       base64decode,
@@ -210,6 +211,21 @@ func coalesce(v ...interface{}) interface{} {
 }
 
 // toJSON encodes an item into a JSON string
+// jsonSeq returns a JSON array of n strings fmt.Sprintf(format, i) for i = 0 … n-1: {{jsonSeq "kw %02d" 3}} gives
+// ["kw 00","kw 01","kw 02"]. n is a number or a numeric string.
+func jsonSeq(format string, n interface{}) string {
+	count, err := strconv.Atoi(strings.TrimSpace(fmt.Sprint(n)))
+	if err != nil || count < 0 {
+		return "[]"
+	}
+	out := make([]string, count)
+	for i := range out {
+		out[i] = fmt.Sprintf(format, i)
+	}
+	b, _ := json.Marshal(out)
+	return string(b)
+}
+
 func toJSON(v interface{}) string {
 	output, _ := json.Marshal(v)
 	return string(output)

@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/fullstorydev/grpcurl"
@@ -58,6 +59,13 @@ type Executor struct {
 	TempoURL  string `json:"tempo_url" yaml:"tempo_url" mapstructure:"tempo_url"`
 	TraceDir  string `json:"trace_dir" yaml:"trace_dir" mapstructure:"trace_dir"`
 	TraceWait int    `json:"trace_wait" yaml:"trace_wait" mapstructure:"trace_wait"`
+	// HostSuffix is appended to a URL host without a dot: svc-tool-server:50051 + cgw-crawler-chain.orb.local gives
+	// svc-tool-server.cgw-crawler-chain.orb.local:50051 (OrbStack routes the host to compose services by that name).
+	HostSuffix string `json:"host_suffix" yaml:"host_suffix" mapstructure:"host_suffix"`
+	// ProtocolFile gets one JSON line per call: ts, case, trace_id, trace_file, trace_saved, call{method, addr, request,
+	// code, message, response}.
+	ProtocolFile string `json:"protocol_file" yaml:"protocol_file" mapstructure:"protocol_file"`
+	Case         string `json:"case" yaml:"case" mapstructure:"case"`
 }
 
 // Result represents a step result
@@ -68,6 +76,8 @@ type Result struct {
 	SystemerrJSON interface{}   `json:"systemerrjson,omitempty" yaml:"systemerrjson,omitempty"`
 	Err           string        `json:"err,omitempty" yaml:"err,omitempty"`
 	Code          string        `json:"code,omitempty" yaml:"code,omitempty"`
+	Status        string        `json:"status,omitempty" yaml:"status,omitempty"`
+	Message       string        `json:"message,omitempty" yaml:"message,omitempty"`
 	Details       []interface{} `json:"details,omitempty" yaml:"details,omitempty"`
 	TimeSeconds   float64       `json:"timeseconds,omitempty" yaml:"timeseconds,omitempty"`
 	TraceID       string        `json:"trace_id,omitempty" yaml:"trace_id,omitempty"`
@@ -119,6 +129,8 @@ func (c *customHandler) OnReceiveTrailers(stat *status.Status, met metadata.MD) 
 		}
 	}
 	c.target.Code = strconv.Itoa(int(uint32(stat.Code())))
+	c.target.Status = stat.Code().String()
+	c.target.Message = stat.Message()
 }
 
 // ZeroValueResult return an empty implementation of this executor result
@@ -162,6 +174,12 @@ func (Executor) Run(ctx context.Context, step venom.TestStep) (interface{}, erro
 	if e.DataJSON != "" {
 		data = []byte(e.DataJSON)
 	}
+	if e.Service == "" {
+		if i := strings.LastIndex(e.Method, "/"); i > 0 {
+			e.Service, e.Method = e.Method[:i], e.Method[i+1:]
+		}
+	}
+	e.URL = withHostSuffix(e.URL, e.HostSuffix)
 
 	result := Result{}
 	start := time.Now()
@@ -309,6 +327,9 @@ func (Executor) Run(ctx context.Context, step venom.TestStep) (interface{}, erro
 			wait = 20 * time.Second
 		}
 		result.TraceSaved, result.TraceFile, _ = tempo.Save(ctx, e.TempoURL, e.TraceDir, traceID, wait)
+	}
+	if e.ProtocolFile != "" {
+		writeProtocol(e, data, &result, err)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("grpcurl.InvokeRPC() failed.\nUrl: %q\nService: %q\nMethod: %q\nData:%v: %v", e.URL, e.Service, e.Method, e.Data, err)
