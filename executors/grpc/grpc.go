@@ -66,6 +66,11 @@ type Executor struct {
 	// code, message, response}.
 	ProtocolFile string `json:"protocol_file" yaml:"protocol_file" mapstructure:"protocol_file"`
 	Case         string `json:"case" yaml:"case" mapstructure:"case"`
+	// Protoset (a FileDescriptorSet file, e.g. `buf build -o x.binpb`) or ProtoFiles with ImportPaths describe the service
+	// for a server without reflection; relative paths are taken from the testsuite folder.
+	Protoset    []string `json:"protoset" yaml:"protoset" mapstructure:"protoset"`
+	ProtoFiles  []string `json:"proto_files" yaml:"proto_files" mapstructure:"proto_files"`
+	ImportPaths []string `json:"import_paths" yaml:"import_paths" mapstructure:"import_paths"`
 }
 
 // Result represents a step result
@@ -283,8 +288,14 @@ func (Executor) Run(ctx context.Context, step venom.TestStep) (interface{}, erro
 	if err != nil {
 		return Result{Err: err.Error()}, fmt.Errorf("grpc dial error: %w", err)
 	}
-	refClient = grpcreflect.NewClientAuto(refCtx, cc)
-	descSource = grpcurl.DescriptorSourceFromServer(ctx, refClient)
+	if src, err := e.fileSource(venom.StringVarFromCtx(ctx, "venom.testsuite.workdir")); err != nil {
+		return nil, err
+	} else if src != nil {
+		descSource = src
+	} else {
+		refClient = grpcreflect.NewClientAuto(refCtx, cc)
+		descSource = grpcurl.DescriptorSourceFromServer(ctx, refClient)
+	}
 
 	// arrange for the RPCs to be cleanly shutdown
 	defer func() {
