@@ -76,6 +76,13 @@ bytes larger than the body, writes the body and closes the write side: the serve
 the promised length — an error of reading the body. The answer is read and returned as usual (`statuscode`, `body`,
 `headers`). Proxy and unix socket settings are not used on this path. Point test: `executors/http/truncate_test.go`.
 
+## 6. A traced http call: `trace`, `tempo_url`, `trace_dir`, `trace_wait`
+
+The same fields as the grpc executor. `trace: auto` (a new W3C trace id) or a 32-hex id is sent as the `traceparent`
+header and returned as `result.trace_id`; with `tempo_url` and `trace_dir` the trace is saved to
+`<trace_dir>/<trace_id>.json` after the answer (`result.trace_saved`, `result.trace_file`). A `traceparent` in
+`headers` wins over the generated one. Point test: `executors/http/trace_test.go`.
+
 ## Build
 
 ```bash

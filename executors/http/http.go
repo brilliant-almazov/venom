@@ -21,6 +21,7 @@ import (
 
 	"github.com/mitchellh/mapstructure"
 	"github.com/ovh/venom"
+	"github.com/ovh/venom/executors/tempo"
 	"github.com/ovh/venom/interpolate"
 )
 
@@ -61,6 +62,13 @@ type Executor struct {
 	// TruncateBody: N > 0 declares a Content-Length N bytes larger than the body, sends the body and closes the write
 	// side, so the server meets the end of the body early (an error of reading the body); the answer is read as usual.
 	TruncateBody int `json:"truncate_body" yaml:"truncate_body" mapstructure:"truncate_body"`
+	// Trace: "auto" (a new W3C trace id) or a 32-hex trace id; sent as the traceparent header, returned as result.trace_id.
+	// TempoURL and TraceDir: the trace is saved to <trace_dir>/<trace_id>.json after the answer (executors/tempo),
+	// waiting up to TraceWait seconds (default 20) for Tempo to ingest it. The same fields as the grpc executor.
+	Trace     string `json:"trace" yaml:"trace" mapstructure:"trace"`
+	TempoURL  string `json:"tempo_url" yaml:"tempo_url" mapstructure:"tempo_url"`
+	TraceDir  string `json:"trace_dir" yaml:"trace_dir" mapstructure:"trace_dir"`
+	TraceWait int    `json:"trace_wait" yaml:"trace_wait" mapstructure:"trace_wait"`
 }
 
 // Result represents a step result. Json and yaml descriptor are used for json output
@@ -73,6 +81,9 @@ type Result struct {
 	Headers     Headers     `json:"headers,omitempty" yaml:"headers,omitempty"`
 	Err         string      `json:"err,omitempty" yaml:"err,omitempty"`
 	Systemout   string      `json:"systemout,omitempty" yaml:"systemout,omitempty"`
+	TraceID     string      `json:"trace_id,omitempty" yaml:"trace_id,omitempty"`
+	TraceSaved  string      `json:"trace_saved,omitempty" yaml:"trace_saved,omitempty"`
+	TraceFile   string      `json:"trace_file,omitempty" yaml:"trace_file,omitempty"`
 }
 
 type HTTPRequest struct {
@@ -112,6 +123,12 @@ func (Executor) Run(ctx context.Context, step venom.TestStep) (interface{}, erro
 	req, err := e.getRequest(ctx, workdir)
 	if err != nil {
 		return nil, err
+	}
+
+	traceID := ""
+	if e.Trace != "" {
+		traceID = tempo.NewTraceID(e.Trace)
+		req.Header.Set("traceparent", "00-"+traceID+"-"+tempo.NewSpanID()+"-01")
 	}
 
 	for k, v := range e.Headers {
@@ -268,6 +285,14 @@ func (Executor) Run(ctx context.Context, step venom.TestStep) (interface{}, erro
 	}
 
 	result.StatusCode = resp.StatusCode
+	if traceID != "" {
+		result.TraceID = traceID
+		wait := time.Duration(e.TraceWait) * time.Second
+		if e.TraceWait <= 0 {
+			wait = 20 * time.Second
+		}
+		result.TraceSaved, result.TraceFile, _ = tempo.Save(ctx, e.TempoURL, e.TraceDir, traceID, wait)
+	}
 	return result, nil
 }
 
