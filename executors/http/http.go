@@ -69,6 +69,8 @@ type Executor struct {
 	TempoURL  string `json:"tempo_url" yaml:"tempo_url" mapstructure:"tempo_url"`
 	TraceDir  string `json:"trace_dir" yaml:"trace_dir" mapstructure:"trace_dir"`
 	TraceWait int    `json:"trace_wait" yaml:"trace_wait" mapstructure:"trace_wait"`
+	// parallel: N > 1 (a number or its text) sends the same request N times at once and returns a ParallelResult
+	// (executors/http/parallel.go); it is read from the step before decoding, so it has no field here.
 }
 
 // Result represents a step result. Json and yaml descriptor are used for json output
@@ -108,6 +110,9 @@ func (Executor) GetDefaultAssertions() *venom.StepAssertions {
 // Run execute TestStep
 func (Executor) Run(ctx context.Context, step venom.TestStep) (interface{}, error) {
 	// transform step to Executor Instance
+	if n, ok := parallelOf(step); ok && n > 1 {
+		return runParallel(ctx, step, n)
+	}
 	var e Executor
 	if err := mapstructure.Decode(step, &e); err != nil {
 		return nil, err

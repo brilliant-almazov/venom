@@ -91,6 +91,14 @@ returns the absolute path as `result.output_file`. The path stays inside the out
 traced call leaves this file as the record of its verdict. Point tests: `executors/evidence/evidence_test.go`,
 `executors/exec/output_file_test.go`.
 
+## 8. Concurrent calls of one http step: `parallel: N`
+
+An `http` step with `parallel: N` (N > 1, a number or its text, so a user executor can template it) sends the same
+request N times at once behind one barrier, as the grpc step of section 4. The result keeps the first call as the
+plain fields (`statuscode`, `body`, `bodyjson`, `headers`, `trace_id`) and adds, in call order: `codes` (HTTP statuses
+joined by a comma), `bodies` (each body on one line, joined by a newline), `distinct_bodies`, `trace_ids`, `calls`.
+Point test: `executors/http/parallel_test.go`.
+
 ## Build
 
 ```bash
