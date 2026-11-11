@@ -55,6 +55,20 @@ v1.3.0 sequential run. Also `VENOM_PARALLEL_SUITES=N` and `parallel_suites: N` i
   falls back to 1 on its own rule (above and section 2).
 - The first error that stops a testsuite is returned in file order, as a sequential run returns it.
 
+## 4. Concurrent calls of one grpc step: `parallel: N`
+
+A `grpc` step with `parallel: N` (N > 1) sends the same request N times at once: N goroutines wait behind one
+barrier and each runs the step without `parallel`. The result keeps the first call as the plain fields (`code`,
+`status`, `systemout`, `trace_id`, …) and adds, in call order:
+
+- `codes` — the status names joined by a comma, `OK,OK,OK,OK,OK`;
+- `bodies` — every answer on one line (JSON compacted; an error call gives its status message), joined by a newline;
+- `distinct_bodies` — how many different answers there were;
+- `trace_ids` — the trace id of every call (with `trace: auto` each call has its own);
+- `calls` — every call result.
+
+Point test: `executors/grpc/parallel_test.go`.
+
 ## Build
 
 ```bash

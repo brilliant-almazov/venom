@@ -71,6 +71,9 @@ type Executor struct {
 	Protoset    []string `json:"protoset" yaml:"protoset" mapstructure:"protoset"`
 	ProtoFiles  []string `json:"proto_files" yaml:"proto_files" mapstructure:"proto_files"`
 	ImportPaths []string `json:"import_paths" yaml:"import_paths" mapstructure:"import_paths"`
+	// Parallel: N > 1 sends the same request N times at once and returns a ParallelResult (codes, bodies,
+	// distinct_bodies, trace_ids and calls in call order; the first call as the plain fields).
+	Parallel int `json:"parallel" yaml:"parallel" mapstructure:"parallel"`
 }
 
 // Result represents a step result
@@ -154,6 +157,9 @@ func (Executor) Run(ctx context.Context, step venom.TestStep) (interface{}, erro
 	var e Executor
 	if err := mapstructure.WeakDecode(step, &e); err != nil {
 		return nil, err
+	}
+	if e.Parallel > 1 {
+		return runParallel(ctx, step, e.Parallel)
 	}
 
 	traceID := ""
