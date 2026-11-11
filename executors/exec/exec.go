@@ -15,6 +15,7 @@ import (
 	"github.com/mitchellh/mapstructure"
 
 	"github.com/ovh/venom"
+	"github.com/ovh/venom/executors/evidence"
 )
 
 // Name for test exec
@@ -30,6 +31,8 @@ type Executor struct {
 	Command []string `json:"command,omitempty" yaml:"command,omitempty"`
 	Stdin   *string  `json:"stdin,omitempty" yaml:"stdin,omitempty"`
 	Script  *string  `json:"script,omitempty" yaml:"script,omitempty"`
+	// OutputFile: systemout, then systemerr, are written to <venom.outputdir>/<output_file> (executors/evidence).
+	OutputFile string `json:"output_file,omitempty" yaml:"output_file,omitempty" mapstructure:"output_file"`
 }
 
 // Result represents a step result
@@ -39,8 +42,10 @@ type Result struct {
 	Systemerr     string      `json:"systemerr,omitempty" yaml:"systemerr,omitempty"`
 	SystemerrJSON interface{} `json:"systemerrjson,omitempty" yaml:"systemerrjson,omitempty"`
 	Err           string      `json:"err,omitempty" yaml:"err,omitempty"`
-	Code          string      `json:"code,omitempty" yaml:"code,omitempty"`
-	TimeSeconds   float64     `json:"timeseconds,omitempty" yaml:"timeseconds,omitempty"`
+	// OutputFile is the absolute path the output was written to, empty without output_file.
+	OutputFile  string  `json:"output_file,omitempty" yaml:"output_file,omitempty"`
+	Code        string  `json:"code,omitempty" yaml:"code,omitempty"`
+	TimeSeconds float64 `json:"timeseconds,omitempty" yaml:"timeseconds,omitempty"`
 }
 
 // ZeroValueResult return an empty implementation of this executor result
@@ -194,7 +199,7 @@ func (Executor) Run(ctx context.Context, step venom.TestStep) (interface{}, erro
 			if n > 0 {
 				chunk := buf[:n]
 				sb.Write(chunk)
-				venom.Debug(ctx, venom.HideSensitive(ctx, string(chunk)))
+				venom.Debug(ctx, "%s", venom.HideSensitive(ctx, string(chunk)))
 			}
 			if err != nil {
 				break
@@ -241,5 +246,10 @@ func (Executor) Run(ctx context.Context, step venom.TestStep) (interface{}, erro
 		result.SystemerrJSON = errJSON
 	}
 
+	file, err := evidence.Write(ctx, e.OutputFile, result.Systemout+result.Systemerr)
+	if err != nil {
+		return nil, err
+	}
+	result.OutputFile = file
 	return result, nil
 }

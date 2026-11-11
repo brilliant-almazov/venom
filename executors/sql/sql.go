@@ -26,6 +26,7 @@ import (
 	_ "modernc.org/sqlite"
 
 	"github.com/ovh/venom"
+	"github.com/ovh/venom/executors/evidence"
 	"github.com/ovh/venom/executors/hostsuffix"
 )
 
@@ -47,6 +48,8 @@ type Executor struct {
 	ReadOnly bool `json:"read_only,omitempty" yaml:"read_only,omitempty" mapstructure:"read_only"`
 	// HostSuffix is appended to a bare DSN host when the suffixed name resolves (executors/hostsuffix).
 	HostSuffix string `json:"host_suffix,omitempty" yaml:"host_suffix,omitempty" mapstructure:"host_suffix"`
+	// OutputFile: the Out of the last query is written to <venom.outputdir>/<output_file> (executors/evidence).
+	OutputFile string `json:"output_file,omitempty" yaml:"output_file,omitempty" mapstructure:"output_file"`
 }
 
 // Rows represents an array of Row
@@ -68,6 +71,8 @@ type Result struct {
 	Queries []QueryResult `json:"queries,omitempty" yaml:"queries,omitempty"`
 	// Out is the Out of the last query.
 	Out string `json:"out" yaml:"out"`
+	// OutputFile is the absolute path the Out was written to, empty without output_file.
+	OutputFile string `json:"output_file,omitempty" yaml:"output_file,omitempty"`
 }
 
 // Run implements the venom.Executor interface for Executor.
@@ -135,6 +140,11 @@ func (e Executor) Run(ctx context.Context, step venom.TestStep) (interface{}, er
 	if len(results) > 0 {
 		r.Out = results[len(results)-1].Out
 	}
+	file, err := evidence.Write(ctx, e.OutputFile, r.Out)
+	if err != nil {
+		return nil, err
+	}
+	r.OutputFile = file
 	return r, nil
 }
 

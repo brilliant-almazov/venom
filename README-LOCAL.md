@@ -83,6 +83,14 @@ header and returned as `result.trace_id`; with `tempo_url` and `trace_dir` the t
 `<trace_dir>/<trace_id>.json` after the answer (`result.trace_saved`, `result.trace_file`). A `traceparent` in
 `headers` wins over the generated one. Point test: `executors/http/trace_test.go`.
 
+## 7. Raw output of a read-back step: sql and exec `output_file`
+
+`output_file: <relative path>` on a `sql` or `exec` step writes the raw output — `out` of the last query, or
+`systemout` then `systemerr` — to `<venom output dir>/<path>` (the testsuite folder when the run has no output dir) and
+returns the absolute path as `result.output_file`. The path stays inside the output dir. A read-back step that makes no
+traced call leaves this file as the record of its verdict. Point tests: `executors/evidence/evidence_test.go`,
+`executors/exec/output_file_test.go`.
+
 ## Build
 
 ```bash
