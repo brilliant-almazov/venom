@@ -2,26 +2,19 @@ package grpc
 
 import (
 	"encoding/json"
-	"net"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
+
+	"github.com/ovh/venom/executors/hostsuffix"
 )
 
 var protocolMu sync.Mutex
 
-// withHostSuffix appends suffix to a host without a dot: "svc:50051" + "p.orb.local" -> "svc.p.orb.local:50051".
+// withHostSuffix appends suffix to a bare host when the suffixed name resolves (executors/hostsuffix).
 func withHostSuffix(url, suffix string) string {
-	if suffix == "" {
-		return url
-	}
-	host, port, err := net.SplitHostPort(url)
-	if err != nil || strings.Contains(host, ".") || host == "localhost" {
-		return url
-	}
-	return net.JoinHostPort(host+"."+strings.TrimPrefix(suffix, "."), port)
+	return hostsuffix.HostPort(url, suffix)
 }
 
 func rawOrText(b []byte) interface{} {

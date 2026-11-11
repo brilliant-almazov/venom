@@ -10,10 +10,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/url"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -23,6 +21,7 @@ import (
 	"github.com/mitchellh/mapstructure"
 
 	"github.com/ovh/venom"
+	"github.com/ovh/venom/executors/hostsuffix"
 )
 
 // Name of the executor.
@@ -188,20 +187,11 @@ func (e Executor) client() (*awss3.Client, error) {
 	}), nil
 }
 
-// WithHostSuffix appends suffix to an endpoint host without a dot: http://s3:9000 + p.orb.local -> http://s3.p.orb.local:9000.
+// WithHostSuffix appends suffix to a bare endpoint host when the suffixed name resolves (executors/hostsuffix).
 func WithHostSuffix(endpoint, suffix string) (string, error) {
 	u, err := url.Parse(endpoint)
 	if err != nil || u.Host == "" {
 		return "", fmt.Errorf("s3: endpoint %q is not a URL", endpoint)
 	}
-	host, port := u.Hostname(), u.Port()
-	if suffix != "" && !strings.Contains(host, ".") && host != "localhost" {
-		host = host + "." + strings.TrimPrefix(suffix, ".")
-	}
-	if port != "" {
-		u.Host = net.JoinHostPort(host, port)
-	} else {
-		u.Host = host
-	}
-	return u.String(), nil
+	return hostsuffix.URL(endpoint, suffix), nil
 }

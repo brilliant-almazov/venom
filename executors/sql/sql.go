@@ -26,6 +26,7 @@ import (
 	_ "modernc.org/sqlite"
 
 	"github.com/ovh/venom"
+	"github.com/ovh/venom/executors/hostsuffix"
 )
 
 // Name of the executor.
@@ -44,6 +45,8 @@ type Executor struct {
 	DSN      string   `json:"dsn" yaml:"dsn"`
 	// ReadOnly runs every command in one read-only transaction.
 	ReadOnly bool `json:"read_only,omitempty" yaml:"read_only,omitempty" mapstructure:"read_only"`
+	// HostSuffix is appended to a bare DSN host when the suffixed name resolves (executors/hostsuffix).
+	HostSuffix string `json:"host_suffix,omitempty" yaml:"host_suffix,omitempty" mapstructure:"host_suffix"`
 }
 
 // Rows represents an array of Row
@@ -75,6 +78,9 @@ func (e Executor) Run(ctx context.Context, step venom.TestStep) (interface{}, er
 	}
 	// Connect to the database and ping it.
 	venom.Debug(ctx, "connecting to database %s, %s\n", e.Driver, e.DSN)
+	if e.HostSuffix != "" {
+		e.DSN = hostsuffix.URL(e.DSN, e.HostSuffix)
+	}
 	db, err := sqlx.Connect(e.Driver, e.DSN)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to connect to database")

@@ -8,9 +8,13 @@ import (
 	"testing"
 
 	"github.com/ovh/venom"
+	"github.com/ovh/venom/executors/hostsuffix"
 )
 
 func TestWithHostSuffix(t *testing.T) {
+	old := hostsuffix.Lookup
+	defer func() { hostsuffix.Lookup = old }()
+	hostsuffix.Lookup = func(string) bool { return true }
 	cases := map[[2]string]string{
 		{"http://s3:9000", "cgw-crawler-chain.orb.local"}: "http://s3.cgw-crawler-chain.orb.local:9000",
 		{"http://s3:9000", ""}:                            "http://s3:9000",
