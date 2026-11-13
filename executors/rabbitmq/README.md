@@ -176,3 +176,30 @@ testcases:
           - result.bodyjson.bodyjson0 ShouldContainKey Status
           - result.bodyjson.bodyjson0.Status ShouldEqual Succeeded
 ```
+
+## Protobuf bodies (subscriber)
+
+A subscriber step decodes protobuf message bodies to JSON when it names the descriptors, as the grpc executor does:
+
+```yaml
+- type: rabbitmq
+  addrs: amqp://rabbitmq:5672
+  user: guest
+  password: guest
+  clientType: subscriber
+  qName: qa-capture
+  queue_passive: true          # read a queue the stand declared and bound; nothing is declared or bound
+  messageLimit: 50             # an empty queue ends the read early when bodies are decoded
+  proto_files: [cgw/crawler/v1/bus.proto]
+  import_paths: [/proto]
+  message_types:               # routing key → message type; message_type is the type of any other key
+    order.outcome: cgw.crawler.v1.CrawlerOrderOutcome
+  message_type: cgw.crawler.v1.FactEnvelope
+  assertions:
+    - result.count ShouldBeGreaterThan 0
+    - result.routing_keys ShouldContain order.outcome
+    - result.bodyjson.bodyjson0.kind ShouldNotBeEmpty
+```
+
+Result per message, in read order: `body` (JSON text of a decoded body), `bodyjson`, `routing_keys`, `exchanges`,
+`types` (the message type used, empty for a key without one), `headers`; `count` is the number of messages read.

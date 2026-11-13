@@ -2,6 +2,7 @@ package rabbitmq
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -59,6 +60,17 @@ type Executor struct {
 	// Used when ClientType is producer
 	// Messages represents the message sended by producer
 	Messages []Message `json:"messages" yaml:"messages"`
+
+	// Used when ClientType is subscriber: protobuf bodies are decoded to JSON (result.bodyjson) by the message type of
+	// their routing key. Protoset (a FileDescriptorSet file) or ProtoFiles with ImportPaths describe the types, as the
+	// grpc executor; MessageTypes maps a routing key to a full message name, MessageType is the type of any other key.
+	Protoset     []string          `json:"protoset" yaml:"protoset" mapstructure:"protoset"`
+	ProtoFiles   []string          `json:"proto_files" yaml:"proto_files" mapstructure:"proto_files"`
+	ImportPaths  []string          `json:"import_paths" yaml:"import_paths" mapstructure:"import_paths"`
+	MessageType  string            `json:"message_type" yaml:"message_type" mapstructure:"message_type"`
+	MessageTypes map[string]string `json:"message_types" yaml:"message_types" mapstructure:"message_types"`
+	// QueuePassive reads a queue someone else declared (a capture queue of the stand) without declaring or binding it.
+	QueuePassive bool `json:"queue_passive" yaml:"queue_passive" mapstructure:"queue_passive"`
 }
 
 // Result represents a step result.
@@ -68,7 +80,12 @@ type Result struct {
 	Messages    []interface{} `json:"messages" yaml:"messages"`
 	BodyJSON    []interface{} `json:"bodyjson" yaml:"bodyJSON"`
 	Headers     []amqp.Table  `json:"headers" yaml:"headers"`
-	Err         string        `json:"err" yaml:"error"`
+	// RoutingKeys, Exchanges and Types are per message in read order; Types names the protobuf type a body was decoded as.
+	RoutingKeys []string `json:"routing_keys" yaml:"routingKeys"`
+	Exchanges   []string `json:"exchanges" yaml:"exchanges"`
+	Types       []string `json:"types" yaml:"types"`
+	Count       int      `json:"count" yaml:"count"`
+	Err         string   `json:"err" yaml:"error"`
 }
 
 // ZeroValueResult return an empty implementation of this executor result
@@ -111,8 +128,12 @@ func (Executor) Run(ctx context.Context, step venom.TestStep) (interface{}, erro
 			return nil, err
 		}
 	case "subscriber":
-		var err error
-		result.Body, result.BodyJSON, result.Messages, result.Headers, err = e.consumeMessages(ctx)
+		dec, err := e.decoder(venom.StringVarFromCtx(ctx, "venom.testsuite.workdir"))
+		if err != nil {
+			result.Err = err.Error()
+			return nil, err
+		}
+		err = e.consumeMessages(ctx, dec, &result)
 		if err != nil {
 			result.Err = err.Error()
 			return nil, err
@@ -274,29 +295,34 @@ func (e Executor) processMessage(ctx context.Context, msg amqp.Delivery, ok bool
 	return body, bodyJSON
 }
 
-func (e Executor) consumeMessages(ctx context.Context) ([]string, []interface{}, []interface{}, []amqp.Table, error) {
+func (e Executor) consumeMessages(ctx context.Context, dec *protoDecoder, r *Result) error {
 	conn, ch, err := e.openChannel(ctx)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return err
 	}
 	defer conn.Close()
 	defer ch.Close()
 
-	q, err := ch.QueueDeclare(
-		e.QName,   // name
-		e.Durable, // durable
-		false,     // delete when unused
-		false,     // exclusive
-		false,     // no-wait
-		nil,       // arguments
-	)
+	var q amqp.Queue
+	if e.QueuePassive {
+		q, err = ch.QueueDeclarePassive(e.QName, e.Durable, false, false, false, nil)
+	} else {
+		q, err = ch.QueueDeclare(
+			e.QName,   // name
+			e.Durable, // durable
+			false,     // delete when unused
+			false,     // exclusive
+			false,     // no-wait
+			nil,       // arguments
+		)
+	}
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return err
 	}
 	venom.Debug(ctx, "Q declared '%s'", q.Name)
 
 	// If an exchange if defined
-	if e.Exchange != "" {
+	if e.Exchange != "" && !e.QueuePassive {
 		err = ch.ExchangeDeclare(
 			e.Exchange,     // name
 			e.ExchangeType, // type
@@ -307,7 +333,7 @@ func (e Executor) consumeMessages(ctx context.Context) ([]string, []interface{},
 			nil,            // arguments
 		)
 		if err != nil {
-			return nil, nil, nil, nil, err
+			return err
 		}
 		venom.Debug(ctx, "exchange declared '%s' '%s'", e.Exchange, e.ExchangeType)
 
@@ -319,28 +345,46 @@ func (e Executor) consumeMessages(ctx context.Context) ([]string, []interface{},
 			nil,          // arguments
 		)
 		if err != nil {
-			return nil, nil, nil, nil, err
+			return err
 		}
 		venom.Debug(ctx, "Q binded '%s' '%s'", q.Name, e.RoutingKey)
 	}
 
-	body := []string{}
-	bodyJSON := []interface{}{}
-	messages := []interface{}{}
-	headers := []amqp.Table{}
-
+	r.Body, r.BodyJSON, r.Messages, r.Headers = []string{}, []interface{}{}, []interface{}{}, []amqp.Table{}
+	r.RoutingKeys, r.Exchanges, r.Types = []string{}, []string{}, []string{}
 	for i := 0; i < e.MessageLimit; i++ {
 		venom.Debug(ctx, "Read message n° %d", i)
 
 		msg, ok, err := ch.Get(q.Name, true) // Read one message from RabbitMQ
 		if err != nil {
-			return nil, nil, nil, nil, err
+			return err
+		}
+		if !ok && dec != nil {
+			break // an empty queue ends the read of a decoding step: result.count says how many came
 		}
 
-		headers = append(headers, msg.Headers)
-		messages = append(messages, msg)
-		body, bodyJSON = e.processMessage(ctx, msg, ok, body, bodyJSON)
+		r.Headers = append(r.Headers, msg.Headers)
+		r.Messages = append(r.Messages, msg)
+		r.RoutingKeys = append(r.RoutingKeys, msg.RoutingKey)
+		r.Exchanges = append(r.Exchanges, msg.Exchange)
+		if dec == nil {
+			r.Body, r.BodyJSON = e.processMessage(ctx, msg, ok, r.Body, r.BodyJSON)
+			r.Types = append(r.Types, "")
+			continue
+		}
+		js, name, derr := dec.decode(ctx, msg)
+		if derr != nil {
+			return derr
+		}
+		r.Types = append(r.Types, name)
+		if name == "" {
+			r.Body, r.BodyJSON = e.processMessage(ctx, msg, ok, r.Body, r.BodyJSON)
+			continue
+		}
+		raw, _ := json.Marshal(js) //nolint
+		r.Body = append(r.Body, string(raw))
+		r.BodyJSON = append(r.BodyJSON, js)
 	}
-
-	return body, bodyJSON, messages, headers, err
+	r.Count = len(r.RoutingKeys)
+	return nil
 }
