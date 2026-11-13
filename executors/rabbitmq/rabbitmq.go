@@ -71,6 +71,9 @@ type Executor struct {
 	MessageTypes map[string]string `json:"message_types" yaml:"message_types" mapstructure:"message_types"`
 	// QueuePassive reads a queue someone else declared (a capture queue of the stand) without declaring or binding it.
 	QueuePassive bool `json:"queue_passive" yaml:"queue_passive" mapstructure:"queue_passive"`
+	// QueueDelete deletes the queue after the read: a step-own capture queue leaves nothing behind on the broker.
+	// messageLimit -1 declares and binds the queue and reads nothing, so a later step reads what came after the binding.
+	QueueDelete bool `json:"queue_delete" yaml:"queue_delete" mapstructure:"queue_delete"`
 }
 
 // Result represents a step result.
@@ -386,5 +389,11 @@ func (e Executor) consumeMessages(ctx context.Context, dec *protoDecoder, r *Res
 		r.BodyJSON = append(r.BodyJSON, js)
 	}
 	r.Count = len(r.RoutingKeys)
+	if e.QueueDelete {
+		if _, err := ch.QueueDelete(q.Name, false, false, false); err != nil {
+			return err
+		}
+		venom.Debug(ctx, "Q deleted '%s'", q.Name)
+	}
 	return nil
 }

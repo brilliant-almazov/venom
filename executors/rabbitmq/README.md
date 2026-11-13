@@ -203,3 +203,22 @@ A subscriber step decodes protobuf message bodies to JSON when it names the desc
 
 Result per message, in read order: `body` (JSON text of a decoded body), `bodyjson`, `routing_keys`, `exchanges`,
 `types` (the message type used, empty for a key without one), `headers`; `count` is the number of messages read.
+
+A step-own capture queue: bind it before the action with `messageLimit: -1` (declare and bind, read nothing), read it after
+the action with `queue_delete: true` (the queue is deleted after the read):
+
+```yaml
+- type: rabbitmq
+  clientType: subscriber
+  qName: qa-B8-93-1201
+  exchange: cgw-crawler.facts
+  exchangeType: fanout
+  messageLimit: -1
+# … the action …
+- type: rabbitmq
+  clientType: subscriber
+  qName: qa-B8-93-1201
+  queue_passive: true
+  queue_delete: true
+  messageLimit: 200
+```
