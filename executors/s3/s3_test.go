@@ -1,6 +1,8 @@
 package s3
 
 import (
+	"bytes"
+	"compress/zlib"
 	"context"
 	"net/http"
 	"net/http/httptest"
@@ -74,5 +76,22 @@ func TestActions(t *testing.T) {
 	}
 	if r := run(t, srv.URL, venom.TestStep{"action": "get", "key": "k"}); r.Content != `{"a":1}` {
 		t.Fatalf("get %+v", r)
+	}
+}
+
+func TestInflateZlib(t *testing.T) {
+	var buf bytes.Buffer
+	w := zlib.NewWriter(&buf)
+	_, _ = w.Write([]byte(`{"ok":true}`))
+	_ = w.Close()
+	var r Result
+	r.inflate(buf.Bytes())
+	if r.InflateErr != "" || r.Inflated != `{"ok":true}` || r.InflatedLen != 11 {
+		t.Fatalf("inflate: %+v", r)
+	}
+	var bad Result
+	bad.inflate([]byte("plain text"))
+	if bad.InflateErr == "" {
+		t.Fatal("plain text is not raw zlib")
 	}
 }

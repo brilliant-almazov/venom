@@ -6,7 +6,10 @@
 package s3
 
 import (
+	"bytes"
+	"compress/zlib"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -51,6 +54,9 @@ type Executor struct {
 	MaxKeys    int    `json:"max_keys" yaml:"max_keys" mapstructure:"max_keys"`
 	// OutputFile: the result as JSON is written to <venom.outputdir>/<output_file> (executors/evidence).
 	OutputFile string `json:"output_file" yaml:"output_file" mapstructure:"output_file"`
+	// Inflate "zlib" on get: the object is raw zlib; result.inflated is the inflated text, result.inflate_err the reason it
+	// is not raw zlib. result.head_hex is the first two bytes of the object either way (raw zlib of the default level: 789c).
+	Inflate string `json:"inflate" yaml:"inflate" mapstructure:"inflate"`
 }
 
 // Rule is one lifecycle rule.
@@ -71,6 +77,10 @@ type Result struct {
 	Count       int      `json:"count"`
 	Rules       []Rule   `json:"rules"`
 	RulesCount  int      `json:"rules_count"`
+	HeadHex     string   `json:"head_hex"`
+	Inflated    string   `json:"inflated"`
+	InflatedLen int      `json:"inflated_len"`
+	InflateErr  string   `json:"inflate_err"`
 	Code        string   `json:"code"`
 	Err         string   `json:"err"`
 	OutputFile  string   `json:"output_file,omitempty"`
@@ -116,6 +126,10 @@ func (Executor) Run(ctx context.Context, step venom.TestStep) (interface{}, erro
 			b, rerr := io.ReadAll(io.LimitReader(out.Body, MaxContent))
 			r.Exists, r.Size, r.ContentType, r.Content = true, aws.ToInt64(out.ContentLength), aws.ToString(out.ContentType), string(b)
 			err = rerr
+			r.HeadHex = hex.EncodeToString(b[:min(2, len(b))])
+			if e.Inflate == "zlib" {
+				r.inflate(b)
+			}
 		}
 		r.fail(err, true)
 	case "list":
@@ -207,4 +221,19 @@ func WithHostSuffix(endpoint, suffix string) (string, error) {
 		return "", fmt.Errorf("s3: endpoint %q is not a URL", endpoint)
 	}
 	return hostsuffix.URL(endpoint, suffix), nil
+}
+
+// inflate reads b as raw zlib into Inflated (at most MaxContent bytes); a stream that is not raw zlib leaves InflateErr.
+func (r *Result) inflate(b []byte) {
+	zr, err := zlib.NewReader(bytes.NewReader(b))
+	if err != nil {
+		r.InflateErr = err.Error()
+		return
+	}
+	defer zr.Close()
+	out, err := io.ReadAll(io.LimitReader(zr, MaxContent))
+	if err != nil {
+		r.InflateErr = err.Error()
+	}
+	r.Inflated, r.InflatedLen = string(out), len(out)
 }
