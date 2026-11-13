@@ -69,7 +69,8 @@ type Executor struct {
 	ImportPaths  []string          `json:"import_paths" yaml:"import_paths" mapstructure:"import_paths"`
 	MessageType  string            `json:"message_type" yaml:"message_type" mapstructure:"message_type"`
 	MessageTypes map[string]string `json:"message_types" yaml:"message_types" mapstructure:"message_types"`
-	// QueuePassive reads a queue someone else declared (a capture queue of the stand) without declaring or binding it.
+	// QueuePassive reads or publishes to a queue someone else declared (a queue of the stand with its own arguments)
+	// without declaring or binding it.
 	QueuePassive bool `json:"queue_passive" yaml:"queue_passive" mapstructure:"queue_passive"`
 	// QueueDelete deletes the queue after the read: a step-own capture queue leaves nothing behind on the broker.
 	// messageLimit -1 declares and binds the queue and reads nothing, so a later step reads what came after the binding.
@@ -213,16 +214,23 @@ func (e Executor) publishMessages(ctx context.Context, workdir string, connectio
 			return errors.New("QName is mandatory")
 		}
 		routingKey = e.QName
-		_, err := ch.QueueDeclare(
-			e.QName,   // name
-			e.Durable, // durable
-			false,     // delete when unused
-			false,     // exclusive
-			false,     // no-wait
-			nil,       // arguments
-		)
-		if err != nil {
-			return err
+		if e.QueuePassive {
+			// the queue is the stand's (its own DLX and arguments): check it exists, never redeclare it
+			if _, err := ch.QueueDeclarePassive(e.QName, e.Durable, false, false, false, nil); err != nil {
+				return err
+			}
+		} else {
+			_, err := ch.QueueDeclare(
+				e.QName,   // name
+				e.Durable, // durable
+				false,     // delete when unused
+				false,     // exclusive
+				false,     // no-wait
+				nil,       // arguments
+			)
+			if err != nil {
+				return err
+			}
 		}
 		venom.Debug(ctx, "Queue declared '%s'", e.QName)
 	}
