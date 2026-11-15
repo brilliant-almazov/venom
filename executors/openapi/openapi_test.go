@@ -29,7 +29,8 @@ const doc = `{
     "x-required-role": "ROLE_USER",
     "parameters": [
      {"name": "page_size", "in": "query", "required": true, "schema": {"type": "integer", "minimum": 1}},
-     {"name": "status", "in": "query", "schema": {"type": "string", "enum": ["STATUS_UNSPECIFIED", "STATUS_ACTIVE"]}}
+     {"name": "status", "in": "query", "schema": {"type": "string", "enum": ["STATUS_UNSPECIFIED", "STATUS_ACTIVE"]}},
+     {"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 5, "example": 50}}
     ],
     "responses": {"200": {}}
    }
@@ -43,19 +44,24 @@ const doc = `{
    "definition_id": {"type": "string", "example": "7"},
    "kind": {"type": "string", "enum": ["KIND_UNSPECIFIED", "KIND_MAIN"]},
    "limits": {"type": "object", "required": ["cap"], "properties": {"cap": {"type": "integer", "minimum": 0}}},
-   "note": {"type": "string"}
+   "note": {"type": "string"},
+   "comment": {"type": "string", "example": "by qa"}
   }},
   "Owner": {"required": ["tenant_id"], "properties": {"tenant_id": {"type": "string", "example": "9007199254740993"}}}
  }}
 }`
 
 func describe(method, path, role string) Result {
+	return describePlan(method, path, role, Plan{})
+}
+
+func describePlan(method, path, role string, plan Plan) Result {
 	var r Result
 	d := map[string]interface{}{}
 	dec := decoder(doc)
 	_ = dec.Decode(&d)
 	r.Found, r.Allowed = "no", "no"
-	Describe(d, method, path, role, &r)
+	Describe(d, method, path, role, plan, &r)
 	return r
 }
 
@@ -130,4 +136,28 @@ func TestRunNotJSON(t *testing.T) {
 	out, err := Executor{}.Run(context.Background(), venom.TestStep{"url": srv.URL, "method": "get", "path": "/x"})
 	require.NoError(t, err)
 	assert.Equal(t, "no", out.(Result).Found)
+}
+
+func TestDescribePlanBody(t *testing.T) {
+	r := describePlan("POST", "/v1/billing/accounts", "ROLE_ROOT", Plan{
+		Fill:   []string{"comment"},
+		Omit:   []string{"kind"},
+		Static: map[string]interface{}{"tenant_id": "42"},
+		Rows:   `{"data":{"items":[{"Note":"from the list","definitionId":"9"}]}}`,
+	})
+	assert.JSONEq(t, `{"definition_id":"7","limits":{"cap":0},"note":"from the list","comment":"by qa","tenant_id":"42"}`, r.Body,
+		"fill adds comment, omit drops kind, static sets tenant_id, the row gives note that has no example or enum; definition_id keeps its example")
+}
+
+func TestDescribePlanQuery(t *testing.T) {
+	r := describePlan("GET", "/v1/billing/accounts", "ROLE_USER", Plan{QueryFields: []string{"limit", "status"}})
+	assert.Equal(t, "limit=5&page_size=1&status=STATUS_ACTIVE", r.Query, "a query_fields param by its minimum, then its value")
+	r = describePlan("GET", "/v1/billing/accounts", "ROLE_USER", Plan{QueryFields: []string{"status"}, Omit: []string{"page_size"}})
+	assert.Equal(t, "status=STATUS_ACTIVE", r.Query, "an omitted param is left out even when required")
+}
+
+func TestFirstRow(t *testing.T) {
+	assert.Equal(t, map[string]interface{}{"accountid": "1"}, firstRow(`{"data":[{"account_id":"1"}]}`))
+	assert.Equal(t, map[string]interface{}{"accountid": "2"}, firstRow(`{"data":{"account_id":"2"}}`))
+	assert.Nil(t, firstRow(""))
 }

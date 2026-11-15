@@ -13,6 +13,11 @@
 //   - url_path, query and body: the inputs of the call, each value the example of the parameter or field, then its
 //     first enum value that is not *_UNSPECIFIED, then (page_size and other integers) its minimum; url_path is empty
 //     when a path parameter has none of them, a field without any is left out of the body.
+//
+// The request plan of a step (Plan) widens the inputs: `fill` names the non-required body fields to fill the same way,
+// `omit` the fields and query params to leave out, `static` the body fields set as given, `rows` a list answer whose
+// first item gives the value of a field or parameter with no example or enum (its name compared without case and
+// `_`), and `query_fields` the optional query params to add, each by its minimum, then its value.
 package openapi
 
 import (
@@ -50,6 +55,16 @@ type Executor struct {
 	Headers map[string]string `json:"headers" yaml:"headers" mapstructure:"headers"`
 	Trace   string            `json:"trace" yaml:"trace" mapstructure:"trace"`
 	Timeout int               `json:"timeout" yaml:"timeout" mapstructure:"timeout"`
+	Plan    `mapstructure:",squash"`
+}
+
+// Plan is the request plan of a step beyond the required inputs.
+type Plan struct {
+	Fill        []string               `json:"fill" yaml:"fill" mapstructure:"fill"`
+	Omit        []string               `json:"omit" yaml:"omit" mapstructure:"omit"`
+	Static      map[string]interface{} `json:"static" yaml:"static" mapstructure:"static"`
+	Rows        string                 `json:"rows" yaml:"rows" mapstructure:"rows"`
+	QueryFields []string               `json:"query_fields" yaml:"query_fields" mapstructure:"query_fields"`
 }
 
 // Result of the executor.
@@ -117,7 +132,7 @@ func (Executor) Run(ctx context.Context, step venom.TestStep) (interface{}, erro
 	if resp.StatusCode != http.StatusOK || dec.Decode(&doc) != nil {
 		return result, nil
 	}
-	Describe(doc, e.Method, e.Path, e.Role, &result)
+	Describe(doc, e.Method, e.Path, e.Role, e.Plan, &result)
 	return result, nil
 }
 
@@ -128,9 +143,9 @@ func decoder(raw string) *json.Decoder {
 	return dec
 }
 
-// Describe fills the operation fields of result from doc.
-func Describe(doc map[string]interface{}, method, path, role string, result *Result) {
-	s := spec{doc: doc}
+// Describe fills the operation fields of result from doc and the request plan.
+func Describe(doc map[string]interface{}, method, path, role string, plan Plan, result *Result) {
+	s := spec{doc: doc, plan: plan, row: firstRow(plan.Rows)}
 	item := s.resolve(obj(obj(doc["paths"])[path]))
 	op := obj(item[strings.ToLower(method)])
 	if op == nil {
@@ -175,7 +190,38 @@ func Describe(doc map[string]interface{}, method, path, role string, result *Res
 }
 
 type spec struct {
-	doc map[string]interface{}
+	doc  map[string]interface{}
+	plan Plan
+	row  map[string]interface{}
+}
+
+// fold is a field name compared without case and `_`.
+func fold(name string) string {
+	return strings.ToLower(strings.ReplaceAll(name, "_", ""))
+}
+
+// firstRow is the first item of data.items, data or items of a list answer, else its data object, keyed by fold.
+func firstRow(raw string) map[string]interface{} {
+	var answer interface{}
+	if strings.TrimSpace(raw) == "" || decoder(raw).Decode(&answer) != nil {
+		return nil
+	}
+	data := obj(answer)["data"]
+	var row map[string]interface{}
+	for _, l := range [][]interface{}{list(obj(data)["items"]), list(data), list(obj(answer)["items"]), list(answer)} {
+		if len(l) > 0 {
+			row = obj(l[0])
+			break
+		}
+	}
+	if row == nil {
+		row = obj(data)
+	}
+	out := map[string]interface{}{}
+	for k, v := range row {
+		out[fold(k)] = v
+	}
+	return out
 }
 
 // resolve follows $ref and merges allOf.
@@ -216,8 +262,8 @@ func (s spec) resolve(o map[string]interface{}) map[string]interface{} {
 	return o
 }
 
-// value of a parameter or a schema: example, then enum, then minimum.
-func (s spec) value(o map[string]interface{}) (interface{}, bool) {
+// value of a parameter or a schema field named name: example, then enum, then the same field of the rows, then minimum.
+func (s spec) value(name string, o map[string]interface{}) (interface{}, bool) {
 	cands := []map[string]interface{}{s.resolve(o)}
 	if sch := obj(cands[0]["schema"]); sch != nil {
 		cands = append(cands, s.resolve(sch))
@@ -257,6 +303,9 @@ func (s spec) value(o map[string]interface{}) (interface{}, bool) {
 			}
 		}
 	}
+	if v, ok := s.row[fold(name)]; ok && v != nil {
+		return v, true
+	}
 	for _, c := range cands {
 		if m, ok := c["minimum"]; ok {
 			return m, true
@@ -278,7 +327,7 @@ func (s spec) urlPath(path string, params []interface{}) string {
 			if str(p["in"]) != "path" || str(p["name"]) != name {
 				continue
 			}
-			if v, ok := s.value(p); ok && plain(v) != "" {
+			if v, ok := s.value(name, p); ok && plain(v) != "" {
 				out = strings.Replace(out, seg, url.PathEscape(plain(v)), 1)
 				found = true
 			}
@@ -291,15 +340,21 @@ func (s spec) urlPath(path string, params []interface{}) string {
 	return out
 }
 
+// query of the required params and the query_fields, an omitted one left out; a query_fields param takes its minimum
+// first.
 func (s spec) query(params []interface{}) string {
 	q := url.Values{}
 	for _, p := range params {
 		p := s.resolve(obj(p))
-		if str(p["in"]) != "query" || p["required"] != true {
+		name := str(p["name"])
+		asked := contains(s.plan.QueryFields, name)
+		if str(p["in"]) != "query" || (p["required"] != true && !asked) || contains(s.plan.Omit, name) {
 			continue
 		}
-		if v, ok := s.value(p); ok {
-			q.Set(str(p["name"]), plain(v))
+		if m, ok := s.resolve(obj(p["schema"]))["minimum"]; asked && ok {
+			q.Set(name, plain(m))
+		} else if v, ok := s.value(name, p); ok {
+			q.Set(name, plain(v))
 		}
 	}
 	return q.Encode()
@@ -324,25 +379,40 @@ func (s spec) body(op map[string]interface{}, params []interface{}) map[string]i
 		}
 	}
 	if sch == nil {
-		return nil
+		if len(s.plan.Static) == 0 {
+			return nil
+		}
+		sch = map[string]interface{}{}
 	}
-	return s.object(sch, 0)
+	out := s.object(sch, s.plan.Fill, 0)
+	for _, name := range s.plan.Omit {
+		delete(out, name)
+	}
+	for k, v := range s.plan.Static {
+		out[k] = v
+	}
+	return out
 }
 
-// object of the required fields of sch, each by its value; a required object without a value is built the same way.
-func (s spec) object(sch map[string]interface{}, depth int) map[string]interface{} {
+// object of the required fields of sch and the extra ones named, each by its value; a required object without a value
+// is built the same way.
+func (s spec) object(sch map[string]interface{}, extra []string, depth int) map[string]interface{} {
 	out := map[string]interface{}{}
 	props := obj(sch["properties"])
-	for _, r := range list(sch["required"]) {
+	names := list(sch["required"])
+	for _, n := range extra {
+		names = append(names, n)
+	}
+	for _, r := range names {
 		name := str(r)
 		field := s.resolve(obj(props[name]))
 		if field == nil {
 			continue
 		}
-		if v, ok := s.value(field); ok {
+		if v, ok := s.value(name, field); ok {
 			out[name] = v
 		} else if str(field["type"]) == "object" && depth < 10 {
-			out[name] = s.object(field, depth+1)
+			out[name] = s.object(field, nil, depth+1)
 		}
 	}
 	return out

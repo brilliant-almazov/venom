@@ -77,3 +77,26 @@ func TestStandStatusArgv(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, `["status","--env","stand-1"]`, out.(Result).Systemout)
 }
+
+// fakeHealth prints health rows, the red ones with a mark and a duration.
+const fakeHealth = `#!/bin/sh
+echo "  ✓ postgres 0.10 s"
+echo "  ✗ svc-billing-server 1.20 s"
+echo "  ✗ rabbitmq 0.31 s" >&2
+`
+
+func TestCliHealthRed(t *testing.T) {
+	bin := filepath.Join(t.TempDir(), "cli")
+	require.NoError(t, os.WriteFile(bin, []byte(fakeHealth), 0o755))
+	out, err := New().Run(context.Background(), venom.TestStep{"bin": bin, "action": "health", "env": "s", "baseline": "✗ rabbitmq 0.02 s\n  ✓ postgres 0.1 s"})
+	require.NoError(t, err)
+	r := out.(Result)
+	assert.Equal(t, "✗ rabbitmq\n✗ svc-billing-server", r.Red, "the red rows of systemout and systemerr, normalised and sorted")
+	assert.Equal(t, "✗ svc-billing-server", r.RedNew, "only the rows not red in the baseline")
+}
+
+func TestCliRedOnlyForHealth(t *testing.T) {
+	out, err := New().Run(context.Background(), venom.TestStep{"bin": writeFake(t), "action": "service status", "env": "s"})
+	require.NoError(t, err)
+	assert.Empty(t, out.(Result).Red)
+}
