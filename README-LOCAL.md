@@ -118,6 +118,9 @@ skipped by `--stop-on-failure`. Sections:
 - `## Факт`: the `point` and `call` info lines, then the step, code (`statuscode` or `code`), message and body of the call —
   a step with a trace_id and a code, so trace_save and the check steps after the call are not taken —
   the last failed call, or the last call when none failed, and the `fact` info lines;
+  Before them, a step whose info carries `precondition: <entity> <key>=<value> есть|нет` (a read through the API that
+  proves the data is there, or is not) gives one row of the table `### Предусловие`: сущность · ключ · есть/нет · trace,
+  with ✅ when that read held and ❌ when it did not;
 - `## Трасса`: the span tree `<trace_dir>/<trace_id>.md` of that call, looked up in every `trace_dir` and `traces` the
   steps were given;
 - `## Вердикт`: ✅, ❌ with every failed assertion of every step, or ⏭ with the skip reason.
@@ -133,7 +136,7 @@ Stock Venom has none of this. It has no testcase-level `info` key: `TestCaseInpu
 - no executor writes a file.
 The protocol is therefore written by the runner after the status of the testcase is known (`process_testsuite.go`,
 `runOneTestCase`). Point test: `protocol_test.go`, covering green, a failed Must, --stop-on-failure, and a failed Should
-with skipped vars, and the template shape (a call with vars only, then a failing check step).
+with skipped vars, the template shape (a call with vars only, then a failing check step), and the precondition table.
 
 ## Build
 

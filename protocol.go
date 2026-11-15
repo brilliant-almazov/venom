@@ -52,6 +52,7 @@ func protocolText(ts *TestSuite, tc *TestCase) string {
 	protocolKeys(&b, info, "wrong")
 
 	b.WriteString("\n## Факт\n\n")
+	b.WriteString(protocolPreconditions(tc))
 	protocolKeys(&b, info, "point", "call")
 	call, n := protocolLastCall(tc)
 	if call == nil {
@@ -123,6 +124,36 @@ func protocolKeys(b *strings.Builder, info map[string][]string, keys ...string) 
 			fmt.Fprintf(b, "- %s: %s\n", k, val)
 		}
 	}
+}
+
+// protocolPrecondition reads the info line of a precondition step: "precondition: <entity> <key>=<value> есть|нет".
+var protocolPrecondition = regexp.MustCompile(`^\s*precondition\s*:\s*(.+?)\s+(\S+=\S+)\s+(есть|нет)(?:\s+\([^()]+:\d+\))?\s*$`)
+
+// protocolPreconditions prints a table of the precondition steps of the testcase, one row per entity, before the main
+// call: entity, key, the expected presence with ✅ when the read held and ❌ when it did not, the trace of the read.
+func protocolPreconditions(tc *TestCase) string {
+	var rows []string
+	for _, r := range tc.TestStepResults {
+		for _, l := range r.ComputedInfo {
+			m := protocolPrecondition.FindStringSubmatch(l)
+			if m == nil {
+				continue
+			}
+			mark := "✅"
+			if r.Status == StatusFail {
+				mark = "❌"
+			}
+			trace := "—"
+			if id := fmt.Sprint(r.ComputedVars["result.trace_id"]); r.ComputedVars["result.trace_id"] != nil && id != "" {
+				trace = "`" + id + "`"
+			}
+			rows = append(rows, fmt.Sprintf("| %s | `%s` | %s %s | %s |", m[1], m[2], m[3], mark, trace))
+		}
+	}
+	if len(rows) == 0 {
+		return ""
+	}
+	return "### Предусловие\n\n| сущность | ключ | есть/нет | trace |\n| -- | -- | -- | -- |\n" + strings.Join(rows, "\n") + "\n\n"
 }
 
 // protocolLastCall is the call of the testcase: a step result with a trace_id and a code — result.statuscode (http) or

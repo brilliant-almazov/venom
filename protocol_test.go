@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -183,4 +184,41 @@ testcases:
 	assert.Contains(t, p, "systemout ShouldEqual 200")
 	assert.Contains(t, p, "- statuscode: 404", "the call is the fact, not the check step after it")
 	assert.Contains(t, p, "svc-billing ✅ GetAccount")
+}
+
+func TestProtocolPrecondition(t *testing.T) {
+	dir := runProtocolSuite(t, `name: suite
+testcases:
+- name: present
+`+testcaseInfo+`  steps:
+  - type: caller
+    code: 200
+    trace_dir: %s
+    info:
+    - "precondition: account id=7 есть"
+    - "expect: данные есть: account id=7"
+    assertions:
+    - result.statuscode MustEqual 200
+  - type: caller
+    code: 200
+- name: absent
+  steps:
+  - type: caller
+    code: 200
+    info:
+    - "precondition: account id=9223372036854775807 нет"
+    assertions:
+    - result.statuscode MustEqual 404
+  - type: caller
+    code: 404
+`, false)
+	p := readProtocol(t, dir, "present")
+	assert.Contains(t, p, "### Предусловие\n\n| сущность | ключ | есть/нет | trace |")
+	assert.Contains(t, p, "| account | `id=7` | есть ✅ | `0af7651916cd43dd8448eb211c80319c` |")
+	assert.Contains(t, p, "- expect: данные есть: account id=7")
+	assert.Less(t, strings.Index(p, "### Предусловие"), strings.Index(p, "- шаг:"), "the table goes before the main call")
+	a := readProtocol(t, dir, "absent")
+	assert.Contains(t, a, "| account | `id=9223372036854775807` | нет ❌ |")
+	assert.Contains(t, a, "шаг 1 «caller»", "the testcase fails at the precondition")
+	assert.Contains(t, a, "result.statuscode MustEqual 404")
 }
