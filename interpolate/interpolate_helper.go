@@ -65,6 +65,7 @@ func init() {
 		"toJSON":       toJSON,
 		"jsonSeq":      jsonSeq,
 		"hashids":      hashid,
+		"traceint":     traceint,
 		"toPrettyJSON": toPrettyJSON,
 		"b64enc":       base64encode,
 		"b64dec":       base64decode,

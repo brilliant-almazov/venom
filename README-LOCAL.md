@@ -107,6 +107,11 @@ function, so a suite reads the salt by an `http` step, keeps it by `vars: from: 
 `X-Idempotency-Key: '{{hashids .salt 8 .n}}'` with n from vars or an API answer instead of a script. An empty salt gives an empty string.
 Point test: `interpolate/hashids_test.go`.
 
+`{{traceint <trace_id>}}` is the first 12 hex digits of a 32-hex trace id as an int64 (at most 2^48-1): the n of
+hashids and the operation_id of a write, keyed on the trace of the call just before it,
+`'{{hashids .salt 8 (traceint .prev_trace)}}'`. An empty or non-hex trace id is an error, never 0. Point test:
+`interpolate/traceint_test.go`.
+
 ## 10. A protocol per testcase: `--protocol-dir`
 
 `--protocol-dir <dir>` (env `VENOM_PROTOCOL_DIR`, `.venomrc` key `protocol_dir`) writes `<dir>/<testsuite>/<testcase>.md`
