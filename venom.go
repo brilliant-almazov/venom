@@ -76,6 +76,8 @@ type Venom struct {
 	Parallel int
 	// ParallelSuites is the number of testsuites run at once; 0 or 1 is sequential.
 	ParallelSuites int
+	// ProtocolDir, when set, receives one protocol file per testcase, whatever its outcome (protocol.go).
+	ProtocolDir string
 }
 
 var trace = color.New(color.Attribute(90)).SprintFunc()

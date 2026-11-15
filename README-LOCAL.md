@@ -107,6 +107,33 @@ function, so a suite reads the salt by an `http` step, keeps it by `vars: from: 
 `X-Idempotency-Key: '{{hashids .salt 8 .n}}'` with n from vars or an API answer instead of a script. An empty salt gives an empty string.
 Point test: `interpolate/hashids_test.go`.
 
+## 10. A protocol per testcase: `--protocol-dir`
+
+`--protocol-dir <dir>` (env `VENOM_PROTOCOL_DIR`, `.venomrc` key `protocol_dir`) writes `<dir>/<testsuite>/<testcase>.md`
+for every testcase, whatever its outcome: passed, failed on a `Should…` assertion, failed on a `Must…` assertion, or
+skipped by `--stop-on-failure`. Sections:
+
+- `## Правильное поведение`: the `happens`, `expect`, `right` and `norm` info lines;
+- `## Что неправильно`: the `wrong` info lines;
+- `## Факт`: the `point` and `call` info lines, then the step, code (`statuscode` or `code`), message and body of the
+  last failed call, or of the last call when none failed, and the `fact` info lines;
+- `## Трасса`: the span tree `<trace_dir>/<trace_id>.md` of that call, looked up in every `trace_dir` and `traces` the
+  steps were given;
+- `## Вердикт`: ✅, ❌ with every failed assertion of every step, or ⏭ with the skip reason.
+
+Info lines are `key: value` and come from the steps (`info:` of a step) and from the testcase itself: a testcase takes
+`info:` next to `name` and `steps` (`types.go`, `TestCaseInput.Info`).
+
+Stock Venom has none of this. It has no testcase-level `info` key: `TestCaseInput` in v1.3.0 carries only `name`,
+`vars`, `skip`, `steps` and `id`. It also cannot write such a file from a suite step:
+- a failed `Must…` assertion and `--stop-on-failure` end the testcase before any later step (`process_testcase.go`,
+  `return` after «At least one required assertion failed»);
+- a failed step sets none of its `vars:` (`continue` before `processVariableAssignments`);
+- no executor writes a file.
+The protocol is therefore written by the runner after the status of the testcase is known (`process_testsuite.go`,
+`runOneTestCase`). Point test: `protocol_test.go`, covering green, a failed Must, --stop-on-failure, and a failed Should
+with skipped vars.
+
 ## Build
 
 ```bash

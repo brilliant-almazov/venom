@@ -120,6 +120,9 @@ func (v *Venom) runTestCases(ctx context.Context, ts *TestSuite) {
 		stop, export := v.runOneTestCase(ctx, ts, tc)
 		if stop {
 			markRemainingSkipped(ts)
+			for j := i + 1; j < len(ts.TestCases); j++ {
+				v.writeProtocol(ctx, ts, &ts.TestCases[j])
+			}
 			return
 		}
 		if export {
@@ -184,6 +187,7 @@ func (v *Venom) runOneTestCase(ctx context.Context, ts *TestSuite, tc *TestCase)
 	} else if tc.Status != StatusSkip {
 		tc.Status = StatusPass
 	}
+	v.writeProtocol(ctx, ts, tc)
 
 	// Verbose mode already reported tests status, so just print them when non-verbose
 	indent := ""

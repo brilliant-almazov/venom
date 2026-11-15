@@ -31,6 +31,7 @@ var (
 	varFiles       []string
 	outputDir      string
 	libDir         string
+	protocolDir    string
 	htmlReport     bool
 	stopOnFailure  bool
 	parallel       int = 1
@@ -42,6 +43,7 @@ var (
 	varFilesFlag       *[]string
 	outputDirFlag      *string
 	libDirFlag         *string
+	protocolDirFlag    *string
 	stopOnFailureFlag  *bool
 	parallelFlag       *int
 	parallelSuitesFlag *int
@@ -65,6 +67,7 @@ func init() {
 	variablesFlag = Cmd.Flags().StringArray("var", nil, "--var cds='cds -f config.json' --var cds2='cds -f config.json'")
 	outputDirFlag = Cmd.PersistentFlags().String("output-dir", "", "Output Directory: create tests results file inside this directory")
 	libDirFlag = Cmd.PersistentFlags().String("lib-dir", "", "Lib Directory: can contain user executors. example:/etc/venom/lib:$HOME/venom.d/lib")
+	protocolDirFlag = Cmd.PersistentFlags().String("protocol-dir", "", "Protocol Directory: one <testsuite>/<testcase>.md per testcase, whatever its outcome — expected and wrong behaviour from the info lines, the last call, its span tree, the verdict with every failed assertion. Env: VENOM_PROTOCOL_DIR")
 }
 
 func initArgs(cmd *cobra.Command) {
@@ -115,6 +118,10 @@ func initFromCommandArguments(f *pflag.Flag) {
 	case "lib-dir":
 		if libDirFlag != nil {
 			libDir = *libDirFlag
+		}
+	case "protocol-dir":
+		if protocolDirFlag != nil {
+			protocolDir = *protocolDirFlag
 		}
 	case "verbose":
 		if verboseFlag != nil {
@@ -174,6 +181,7 @@ type ConfigFileData struct {
 	Format         *string   `json:"format,omitempty" yaml:"format,omitempty"`
 	LibDir         *string   `json:"lib_dir,omitempty" yaml:"lib_dir,omitempty"`
 	OutputDir      *string   `json:"output_dir,omitempty" yaml:"output_dir,omitempty"`
+	ProtocolDir    *string   `json:"protocol_dir,omitempty" yaml:"protocol_dir,omitempty"`
 	StopOnFailure  *bool     `json:"stop_on_failure,omitempty" yaml:"stop_on_failure,omitempty"`
 	Parallel       *int      `json:"parallel,omitempty" yaml:"parallel,omitempty"`
 	ParallelSuites *int      `json:"parallel_suites,omitempty" yaml:"parallel_suites,omitempty"`
@@ -205,6 +213,9 @@ func initFromReaderConfigFile(reader io.Reader) error {
 	}
 	if configFileData.OutputDir != nil {
 		outputDir = *configFileData.OutputDir
+	}
+	if configFileData.ProtocolDir != nil {
+		protocolDir = *configFileData.ProtocolDir
 	}
 	if configFileData.StopOnFailure != nil {
 		stopOnFailure = *configFileData.StopOnFailure
@@ -312,6 +323,9 @@ func initFromEnv(environ []string) ([]string, error) {
 	if os.Getenv("VENOM_OUTPUT_DIR") != "" {
 		outputDir = os.Getenv("VENOM_OUTPUT_DIR")
 	}
+	if os.Getenv("VENOM_PROTOCOL_DIR") != "" {
+		protocolDir = os.Getenv("VENOM_PROTOCOL_DIR")
+	}
 	if os.Getenv("VENOM_VERBOSE") != "" {
 		v, err := strconv.ParseInt(os.Getenv("VENOM_VERBOSE"), 10, 64)
 		if err != nil {
@@ -380,6 +394,7 @@ var Cmd = &cobra.Command{
 		initArgs(cmd)
 
 		v.OutputDir = outputDir
+		v.ProtocolDir = protocolDir
 		v.LibDir = libDir
 		v.OutputFormat = format
 		v.StopOnFailure = stopOnFailure
