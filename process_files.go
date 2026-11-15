@@ -117,6 +117,9 @@ func (v *Venom) readFiles(ctx context.Context, filesPath []string) (err error) {
 			Error(context.Background(), "file content: %s", content)
 			return errors.Wrapf(err, "error while unmarshal file %q", filePath)
 		}
+		if err := lintTestSuite(filePath, testSuiteInput); err != nil {
+			return err
+		}
 
 		ts := TestSuite{
 			Name:        testSuiteInput.Name,

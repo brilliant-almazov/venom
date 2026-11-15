@@ -209,6 +209,16 @@ this file under Trace and the trace gate fails a call whose tree is missing. Res
 context is done. The protocol prints each wait under Request as `- wait: step N, <seconds> s, <reason>`. Point tests:
 `executors/wait/wait_test.go`, `TestProtocolWaitLine`.
 
+## 15. Declarative only: a testsuite or user executor with exec or script is rejected at load
+
+A testsuite whose step has `type: exec` or a `script:` body, and a user executor file (lib) with such a step, fail
+`venom run` at load, before any testcase runs, with every such step named: `<file>: testcase "<name>" step <n>: type:
+exec, script:` and `<file>: executor "<name>" step <n>: …`; a lib file that does not parse before interpolation is read
+line by line and named `<file>:<line>`. There is no allowlist (owner 2026-11-15: «ТОЛЬКО декларативно, никакого
+исключения»). The `Expected behaviour` section of a protocol is built only from the info lines `happens`, `expect`,
+`right` and `norm`; the text of a `call:` info line is printed nowhere. Point tests: `declarative_test.go`,
+`TestProtocolExpectedFromInfoKeysOnly`.
+
 ## Build
 
 ```bash

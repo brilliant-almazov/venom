@@ -277,6 +277,10 @@ func (v *Venom) registerUserExecutors(ctx context.Context) error {
 		name := strings.Replace(ex, "executor:", "", 1)
 		name = strings.TrimSpace(name)
 
+		if err := lintUserExecutor(f, name, content); err != nil {
+			return err
+		}
+
 		inputs := readPartialYML(content, "input")
 
 		ux := UserExecutor{

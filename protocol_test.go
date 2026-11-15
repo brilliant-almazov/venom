@@ -407,7 +407,6 @@ testcases:
 `+testcaseInfo+`  steps:
   - type: caller
     code: 200
-    script: echo shell-text-secret
     trace_dir: %[1]s
     info:
     - "call: curl -s http://nginx-gateway/v1/billing/accounts"
@@ -422,7 +421,6 @@ testcases:
     - "call: bin/cli service on svc-billing-server --apply --env stand-1 | grep ok"
 `, false)
 	p := readProtocol(t, dir, "shell")
-	assert.NotContains(t, p, "shell-text-secret", "a script body is never printed")
 	assert.NotContains(t, p, "curl", "the call line is rendered from the step, not from the declared text")
 	assert.Contains(t, p, "- call: `caller`")
 	s := readProtocol(t, dir, "stand")
@@ -456,4 +454,30 @@ testcases:
 	req := p[strings.Index(p, protocolHeadRequest):strings.Index(p, protocolHeadAnswer)]
 	assert.Contains(t, req, fmt.Sprintf(protocolWaitLine, 1, "0.01", "the absence window before the read"))
 	assert.Contains(t, req, fmt.Sprintf(protocolWaitLine, 2, "2", protocolNoReason))
+}
+
+func TestProtocolExpectedFromInfoKeysOnly(t *testing.T) {
+	dir := runProtocolSuite(t, `name: suite
+testcases:
+- name: declared
+  info:
+  - "happens: the account is read by id"
+  - "right: statuscode 200"
+  - "wrong: any other statuscode"
+  - "norm: cgw-billing: docs/api.md:12"
+  steps:
+  - type: caller
+    code: 200
+    method: GET
+    url: /v1/billing/accounts/1
+    trace_dir: %s
+    info:
+    - "call: curl -s http://nginx-gateway/v1/billing/accounts/1"
+    - "expect: the account is read"
+`, false)
+	p := readProtocol(t, dir, "declared")
+	right := p[strings.Index(p, protocolHeadRight):strings.Index(p, protocolHeadWrong)]
+	assert.Equal(t, protocolHeadRight+"\n\n- happens: the account is read by id\n- expect: the account is read\n- right: statuscode 200\n"+
+		"- norm: cgw-billing: docs/api.md:12\n\n", right)
+	assert.NotContains(t, p, "curl", "the call: text is printed nowhere")
 }
