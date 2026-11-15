@@ -27,6 +27,14 @@ func (callExecutor) Run(_ context.Context, step TestStep) (interface{}, error) {
 	return Result{StatusCode: code, Body: fmt.Sprintf(`{"code":%d}`, code), TraceID: "0af7651916cd43dd8448eb211c80319c"}, nil
 }
 
+// checkExecutor answers as a check step of the template (exec echo of a var): systemout and code, no trace_id.
+type checkExecutor struct{}
+
+func (checkExecutor) Run(_ context.Context, step TestStep) (interface{}, error) {
+	out, _ := step.StringValue("out")
+	return map[string]interface{}{"systemout": out}, nil
+}
+
 func runProtocolSuite(t *testing.T, suite string, stopOnFailure bool) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -39,6 +47,7 @@ func runProtocolSuite(t *testing.T, suite string, stopOnFailure bool) string {
 	testLoggerOnce.Do(func() { InitTestLogger(t) })
 	v := New()
 	v.RegisterExecutorBuiltin("caller", callExecutor{})
+	v.RegisterExecutorBuiltin("checker", checkExecutor{})
 	v.OutputDir = dir
 	v.ProtocolDir = filepath.Join(dir, "protocols")
 	v.StopOnFailure = stopOnFailure
@@ -150,5 +159,28 @@ testcases:
 	assert.Contains(t, p, "❌ не пройден")
 	assert.Contains(t, p, "result.statuscode ShouldEqual 200")
 	assert.Contains(t, p, `{"code":422}`, "the failed call is the fact even though its vars were skipped")
+	assert.Contains(t, p, "svc-billing ✅ GetAccount")
+}
+
+func TestProtocolTemplateShape(t *testing.T) {
+	dir := runProtocolSuite(t, `name: suite
+testcases:
+- name: template
+`+testcaseInfo+`  steps:
+  - type: caller
+    code: 404
+    trace_dir: %s
+    vars:
+      call_status:
+        from: result.statuscode
+  - type: checker
+    out: "{{.call_status}}"
+    assertions:
+    - systemout ShouldEqual 200
+`, false)
+	p := readProtocol(t, dir, "template")
+	assert.Contains(t, p, "❌ не пройден")
+	assert.Contains(t, p, "systemout ShouldEqual 200")
+	assert.Contains(t, p, "- statuscode: 404", "the call is the fact, not the check step after it")
 	assert.Contains(t, p, "svc-billing ✅ GetAccount")
 }

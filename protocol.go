@@ -125,29 +125,38 @@ func protocolKeys(b *strings.Builder, info map[string][]string, keys ...string) 
 	}
 }
 
-// protocolLastCall is the last failed step result that answered with a code, or the last such step when none failed:
-// result.statuscode (http) or result.code (grpc, exec and the user executors that pass a call code on).
+// protocolLastCall is the call of the testcase: a step result with a trace_id and a code — result.statuscode (http) or
+// result.code (grpc and the user executors that pass a call code on). The last failed call wins, then the last call;
+// trace_save (a trace_id, no code) and check steps (a code, no trace_id) are not calls. With no such step the last step
+// with a code is taken.
 func protocolLastCall(tc *TestCase) (*TestStepResult, int) {
-	last := -1
+	traced, coded := -1, -1
 	for i := len(tc.TestStepResults) - 1; i >= 0; i-- {
 		r := &tc.TestStepResults[i]
-		if !protocolIsCall(r) {
+		if !protocolHasCode(r) {
 			continue
 		}
-		if r.Status == StatusFail {
-			return r, i
+		if _, ok := r.ComputedVars["result.trace_id"]; ok {
+			if r.Status == StatusFail {
+				return r, i
+			}
+			if traced < 0 {
+				traced = i
+			}
 		}
-		if last < 0 {
-			last = i
+		if coded < 0 {
+			coded = i
 		}
 	}
-	if last < 0 {
-		return nil, -1
+	for _, i := range []int{traced, coded} {
+		if i >= 0 {
+			return &tc.TestStepResults[i], i
+		}
 	}
-	return &tc.TestStepResults[last], last
+	return nil, -1
 }
 
-func protocolIsCall(r *TestStepResult) bool {
+func protocolHasCode(r *TestStepResult) bool {
 	for _, k := range []string{"result.statuscode", "result.code"} {
 		if _, ok := r.ComputedVars[k]; ok {
 			return true
