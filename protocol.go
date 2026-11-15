@@ -14,8 +14,8 @@ import (
 	"github.com/ovh/venom/interpolate"
 )
 
-// protocolBodyMax caps the body of the call printed under «Факт»; the rest is cut with a note.
-const protocolBodyMax = 4000
+// protocolBodyMax caps a body printed under «Запрос», «Ответ» and «Состояние после вызова»; the rest is cut with a note.
+const protocolBodyMax = 20000
 
 // protocolInfoLine reads an info line "key: value"; the " (file:line)" suffix Venom adds to step info is dropped.
 var protocolInfoLine = regexp.MustCompile(`^\s*([a-z_]+)\s*:\s*(.*?)(?:\s+\([^()]+:\d+\))?\s*$`)
@@ -73,26 +73,27 @@ func protocolText(ts *TestSuite, tc *TestCase) string {
 	b.WriteString("\n## Наличие данных\n\n")
 	b.WriteString(protocolPresenceTable(tc, rows, call))
 
-	b.WriteString("\n## Факт\n\n")
+	b.WriteString("\n## Запрос\n\n")
 	protocolKeys(&b, info, "point", "call")
 	if call == nil {
 		b.WriteString("- результат вызова: вызова в testcase нет\n")
 	} else {
 		fmt.Fprintf(&b, "- шаг: %d «%s»\n", n+1, call.Name)
-		for _, k := range []string{"result.statuscode", "result.code", "result.message"} {
-			if val, ok := call.ComputedVars[k]; ok && fmt.Sprint(val) != "" {
-				fmt.Fprintf(&b, "- %s: %v\n", strings.TrimPrefix(k, "result."), val)
-			}
-		}
-		body := protocolBody(call)
-		if len(body) > protocolBodyMax {
-			body = body[:protocolBodyMax] + fmt.Sprintf("\n… обрезано, всего %d байт", len(body))
-		}
-		fmt.Fprintf(&b, "- тело:\n\n```\n%s\n```\n", body)
+		b.WriteString(protocolRequestBlock(call))
+	}
+
+	b.WriteString("\n## Ответ\n\n")
+	if call == nil {
+		b.WriteString("- вызова в testcase нет\n")
+	} else {
+		b.WriteString(protocolResponseBlock(call))
 	}
 	for _, f := range info["fact"] {
 		fmt.Fprintf(&b, "- fact: %s\n", f)
 	}
+
+	b.WriteString("\n## Состояние после вызова\n\n")
+	b.WriteString(protocolAfter(tc, call, n))
 
 	b.WriteString("\n## Трасса\n\n")
 	b.WriteString(protocolTrace(tc, call))
@@ -190,8 +191,7 @@ func protocolPreconditionHeld(tc *TestCase, step int) bool {
 }
 
 func protocolIsCall(r *TestStepResult) bool {
-	_, traced := r.ComputedVars["result.trace_id"]
-	return traced && protocolHasCode(r)
+	return protocolTraced(r) && protocolHasCode(r)
 }
 
 // protocolPresenceTable is the section «Наличие данных»: entity, key, the precondition request, presence with ✅ when
@@ -209,7 +209,7 @@ func protocolPresenceTable(tc *TestCase, rows []protocolPresenceRow, call *TestS
 			mark = "❌ не подтверждено"
 		}
 		trace := "—"
-		if id := fmt.Sprint(r.ComputedVars["result.trace_id"]); r.ComputedVars["result.trace_id"] != nil && id != "" {
+		if id := protocolTraceID(r); id != "" {
 			trace = "`" + id + "`"
 		}
 		fmt.Fprintf(&b, "| %s | `%s` | %s | %s %s | %s | %s |\n", row.entity, row.key, protocolRequest(r), row.presence, mark, trace,
@@ -266,7 +266,8 @@ func protocolRequest(r *TestStepResult) string {
 	return "`" + str("type") + "`"
 }
 
-// protocolLastCall is the call of the testcase, a passed precondition read left out: a step result with a trace_id and a code — result.statuscode (http) or
+// protocolLastCall is the call of the testcase, a passed precondition read left out, among the steps with a «call:» info
+// line when the testcase has one: a step result with a trace_id and a code — result.statuscode (http) or
 // result.code (grpc and the user executors that pass a call code on). The last failed call wins, then the last call;
 // trace_save (a trace_id, no code) and check steps (a code, no trace_id) are not calls. With no such step the last step
 // with a code is taken.
@@ -275,13 +276,19 @@ func protocolLastCall(tc *TestCase, rows []protocolPresenceRow) (*TestStepResult
 	for _, row := range rows {
 		precondition[row.step] = protocolPreconditionHeld(tc, row.step)
 	}
+	named := false
+	for i := range tc.TestStepResults {
+		if _, ok := precondition[i]; !ok && protocolNamesCall(&tc.TestStepResults[i]) {
+			named = true
+		}
+	}
 	traced, coded := -1, -1
 	for i := len(tc.TestStepResults) - 1; i >= 0; i-- {
 		r := &tc.TestStepResults[i]
-		if held, ok := precondition[i]; !protocolHasCode(r) || (ok && held) {
+		if held, ok := precondition[i]; !protocolHasCode(r) || (ok && held) || (named && !protocolNamesCall(r)) {
 			continue
 		}
-		if _, ok := r.ComputedVars["result.trace_id"]; ok {
+		if protocolTraced(r) {
 			if r.Status == StatusFail {
 				return r, i
 			}
@@ -299,6 +306,17 @@ func protocolLastCall(tc *TestCase, rows []protocolPresenceRow) (*TestStepResult
 		}
 	}
 	return nil, -1
+}
+
+// protocolNamesCall: the step carries the «call:» info line, the line the template puts on the tested call only; a
+// read-back after a write carries none, so with such a line the call is never a later read-back.
+func protocolNamesCall(r *TestStepResult) bool {
+	for _, l := range r.ComputedInfo {
+		if m := protocolInfoLine.FindStringSubmatch(l); m != nil && m[1] == "call" {
+			return true
+		}
+	}
+	return false
 }
 
 func protocolHasCode(r *TestStepResult) bool {
@@ -325,15 +343,14 @@ func protocolTrace(tc *TestCase, call *TestStepResult) string {
 	if call == nil {
 		return "- трассы нет: вызова в testcase нет\n"
 	}
-	id := fmt.Sprint(call.ComputedVars["result.trace_id"])
-	if call.ComputedVars["result.trace_id"] == nil || id == "" {
-		return "- трассы нет: вызов не вернул trace_id\n"
+	id := protocolTraceID(call)
+	if id == "" {
+		return "- трассы нет: вызов не вернул trace_id ни в результате, ни в заголовке X-Trace-Id, ни в meta.trace_id тела\n"
 	}
-	var tried []string
-	for _, d := range protocolTraceDirs(tc) {
-		f := filepath.Join(d, id+".md")
-		tried = append(tried, f)
-		if btes, err := os.ReadFile(f); err == nil {
+	f, tried := protocolTreeFile(tc, id)
+	if f != "" {
+		btes, err := os.ReadFile(f)
+		if err == nil {
 			return fmt.Sprintf("- trace_id: %s\n- файл: `%s`\n\n%s\n", id, f, strings.TrimRight(string(btes), "\n"))
 		}
 	}

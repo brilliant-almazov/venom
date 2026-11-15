@@ -187,6 +187,8 @@ func (v *Venom) runOneTestCase(ctx context.Context, ts *TestSuite, tc *TestCase)
 	} else if tc.Status != StatusSkip {
 		tc.Status = StatusPass
 	}
+	traceGate(tc)
+	hasFailure = tc.Status == StatusFail
 	v.writeProtocol(ctx, ts, tc)
 
 	// Verbose mode already reported tests status, so just print them when non-verbose

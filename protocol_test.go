@@ -18,9 +18,34 @@ import (
 type callExecutor struct{}
 
 type Result struct {
-	StatusCode int    `json:"statuscode"`
-	Body       string `json:"body"`
-	TraceID    string `json:"trace_id"`
+	StatusCode int               `json:"statuscode"`
+	Body       string            `json:"body"`
+	TraceID    string            `json:"trace_id,omitempty"`
+	Headers    map[string]string `json:"headers,omitempty"`
+	Request    *testRequest      `json:"request,omitempty"`
+}
+
+type testRequest struct {
+	Method string              `json:"method"`
+	URL    string              `json:"url"`
+	Header map[string][]string `json:"header"`
+	Body   string              `json:"body"`
+}
+
+// gatewayExecutor answers as a gateway call over the http executor without trace: the trace id only in the X-Trace-Id
+// header and in meta.trace_id of the body, as the billing gateway suites of run 15-5 got it.
+type gatewayExecutor struct{}
+
+func (gatewayExecutor) Run(_ context.Context, step TestStep) (interface{}, error) {
+	code, _ := step.IntValue("code")
+	return Result{
+		StatusCode: code,
+		Body:       `{"errors":[{"code":"role_required"}],"meta":{"trace_id":"0af7651916cd43dd8448eb211c80319c"}}`,
+		Headers:    map[string]string{"X-Trace-Id": "0af7651916cd43dd8448eb211c80319c", "X-Request-Id": "r-1", "X-Build": "dev-1", "Server": "nginx"},
+		Request: &testRequest{Method: "POST", URL: "http://nginx-gateway/v1/billing/accounts",
+			Header: map[string][]string{"Authorization": {"Bearer secret-token"}, "X-Idempotency-Key": {"NloBboqV"}},
+			Body:   `{"tenant_id":"7"}`},
+	}, nil
 }
 
 func (callExecutor) Run(_ context.Context, step TestStep) (interface{}, error) {
@@ -49,6 +74,7 @@ func runProtocolSuite(t *testing.T, suite string, stopOnFailure bool) string {
 	v := New()
 	v.RegisterExecutorBuiltin("caller", callExecutor{})
 	v.RegisterExecutorBuiltin("checker", checkExecutor{})
+	v.RegisterExecutorBuiltin("gateway", gatewayExecutor{})
 	v.OutputDir = dir
 	v.ProtocolDir = filepath.Join(dir, "protocols")
 	v.StopOnFailure = stopOnFailure
@@ -89,7 +115,7 @@ testcases:
 `, false)
 	p := readProtocol(t, dir, "green")
 	for _, want := range []string{"## Правильное поведение", "- expect: the account is read", "- right: statuscode 200", "- norm: cgw-billing: docs/api.md:12",
-		"## Что неправильно", "- wrong: any other statuscode", "## Факт", "- call: GET /v1/billing/accounts/1", "- statuscode: 200",
+		"## Что неправильно", "- wrong: any other statuscode", "## Запрос", "## Ответ", "## Состояние после вызова", "- call: GET /v1/billing/accounts/1", "- statuscode: 200",
 		"## Трасса", "svc-billing ✅ GetAccount", "## Вердикт", "✅ пройден"} {
 		assert.Contains(t, p, want)
 	}
@@ -159,7 +185,7 @@ testcases:
 	p := readProtocol(t, dir, "should")
 	assert.Contains(t, p, "❌ не пройден")
 	assert.Contains(t, p, "result.statuscode ShouldEqual 200")
-	assert.Contains(t, p, `{"code":422}`, "the failed call is the fact even though its vars were skipped")
+	assert.Contains(t, p, "## Ответ\n\n- statuscode: 422", "the failed call is the fact even though its vars were skipped")
 	assert.Contains(t, p, "svc-billing ✅ GetAccount")
 }
 
@@ -239,7 +265,7 @@ func TestProtocolPresence(t *testing.T) {
 	p := readProtocol(t, dir, "present")
 	assert.Contains(t, p, "## Наличие данных\n\n| сущность | ключ | запрос | есть/нет | trace id | ключ в проверяемом вызове |")
 	assert.Contains(t, p, "| account | `id=7` | `GET /v1/billing/accounts/7` | данные есть ✅ | `0af7651916cd43dd8448eb211c80319c` | `7` ✅ отправлен")
-	assert.Less(t, strings.Index(p, "## Наличие данных"), strings.Index(p, "## Факт"), "the table goes before the main call")
+	assert.Less(t, strings.Index(p, "## Наличие данных"), strings.Index(p, "## Запрос"), "the table goes before the main call")
 	assert.Equal(t, 1, strings.Count(p, "| account |"), "the expect «данные есть: …» of the call makes no row")
 
 	a := readProtocol(t, dir, "absent")
@@ -299,4 +325,67 @@ testcases:
 	assert.Contains(t, h, "`7` ✅ отправлен")
 	b := readProtocol(t, dir, "broken")
 	assert.Contains(t, b, "данные есть ❌ не подтверждено", "the check after the read fails the precondition")
+}
+
+func TestProtocolGatewayTraceFromHeader(t *testing.T) {
+	dir := runProtocolSuite(t, `name: suite
+testcases:
+- name: gateway
+`+testcaseInfo+`  steps:
+  - type: gateway
+    code: 403
+    info:
+    - "call: POST /v1/billing/accounts"
+  - type: checker
+    out: "403"
+    traces: %s
+    assertions:
+    - systemout ShouldEqual 403
+`, false)
+	p := readProtocol(t, dir, "gateway")
+	for _, want := range []string{"## Запрос", "- метод: POST", "- url: http://nginx-gateway/v1/billing/accounts",
+		"  - Authorization: Bearer *** (12 знаков)", "  - X-Idempotency-Key: NloBboqV", "\"tenant_id\": \"7\"",
+		"## Ответ", "- statuscode: 403", "- trace_id: 0af7651916cd43dd8448eb211c80319c", "  - X-Build: dev-1",
+		"  - X-Request-Id: r-1", "  - X-Trace-Id: 0af7651916cd43dd8448eb211c80319c", "\"code\": \"role_required\"",
+		"## Трасса", "svc-billing ✅ GetAccount", "✅ пройден"} {
+		assert.Contains(t, p, want)
+	}
+	assert.NotContains(t, p, "secret-token")
+	assert.NotContains(t, p, "Server: nginx", "only the trace, request and build headers of the answer")
+	assert.NotContains(t, p, "трассы нет")
+}
+
+func TestProtocolTraceGateFailsWithoutTree(t *testing.T) {
+	dir := runProtocolSuite(t, `name: suite
+testcases:
+- name: untraced
+`+testcaseInfo+`  steps:
+  - type: gateway
+    code: 403
+    trace_dir: %s/missing
+`, false)
+	p := readProtocol(t, dir, "untraced")
+	assert.Contains(t, p, "❌ не пройден")
+	assert.Contains(t, p, "trace 0af7651916cd43dd8448eb211c80319c returned by the call has no saved span tree")
+	assert.Contains(t, p, "- дерева нет:")
+}
+
+func TestProtocolReadBackAfterWrite(t *testing.T) {
+	dir := runProtocolSuite(t, `name: suite
+testcases:
+- name: write
+`+testcaseInfo+`  steps:
+  - type: caller
+    code: 200
+    trace_dir: %s
+    info:
+    - "call: POST /v1/billing/accounts"
+  - type: caller
+    code: 201
+    url: /v1/billing/accounts/7
+`, false)
+	p := readProtocol(t, dir, "write")
+	after := p[strings.Index(p, "## Состояние после вызова"):]
+	assert.Contains(t, after, "### шаг 2 «caller»")
+	assert.Contains(t, after, "- statuscode: 201")
 }
