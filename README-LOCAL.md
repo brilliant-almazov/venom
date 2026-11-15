@@ -394,7 +394,8 @@ replaced. Result: `result.path` (absolute), `result.size`. Point test: `executor
 A `tempo` step with `trace_id` and `join` joins two span sets of the saved trace in Go, with no TraceQL. Each side
 takes the spans whose span line of section 13 matches `match` (Go regexp), the value of the attribute whose key is
 `attr` (the key as it is), and of that value the one group of `extract` (Go regexp with one group, optional; a value
-it does not match is left out):
+it does not match is left out). With `parent` (Go regexp, optional) a side takes only the spans whose parent's span
+line matches it; a span whose parent is not in the trace has an empty parent line:
 
 ```yaml
 - type: tempo
@@ -403,7 +404,7 @@ it does not match is left out):
   trace_dir: '{{.trace_dir}}'
   join:
     left:  {match: ' · Dial · ', attr: 'arg.req', extract: '"unit":"([^"]+)"'}
-    right: {match: 'INSERT INTO', attr: 'arg.3'}
+    right: {match: 'INSERT INTO', attr: 'arg.3', parent: 'CrawlUnitManager'}
 ```
 
 Result, one value per line: `result.join_left` and `result.join_right` (the values found, in span order),
@@ -411,6 +412,33 @@ Result, one value per line: `result.join_left` and `result.join_right` (the valu
 right value, empty when every left value has one). A bad regexp, or an `extract` with other than one group, is a step
 error. Default assertion: `result.join_missing ShouldBeEmpty`; a step that lists its own assertions adds it itself.
 Point test: `executors/tempo/join_test.go`.
+
+## 25. The order of spans in each subtree of one trace: tempo `order`
+
+A `tempo` step with `trace_id` and `order` checks the order of spans in Go over the saved trace, with no TraceQL. Each
+span whose span line of section 13 matches `scope` (Go regexp) is a scope; inside its subtree (its descendants, not the
+scope span itself) `before` and `after` each take the spans whose span line matches `match`, whose parent's span line
+matches `parent` and whose grandparent's span line matches `grandparent` (Go regexps; `parent` and `grandparent` are
+optional). `at` is `start` or `end`: the time of a span compared. With `first: true` an end keeps only the span of its
+set that starts first. A scope is in order when the latest `before` time is at or before the earliest `after` time:
+
+```yaml
+- type: tempo
+  trace_id: '{{.crawl_trace}}'
+  tempo_url: '{{.tempo_url}}'
+  trace_dir: '{{.trace_dir}}'
+  order:
+    scope: ' · consumer/crawl · '
+    before: {match: ' · publish', parent: 'ReserveManager.CreateBySent', grandparent: ' · handle · ', at: end}
+    after:  {match: ' · DialProvider.Dial · ', at: start, first: true}
+```
+
+Result, one scope per line as `<service> · <span> · <span id>`, in start order: `result.order_scopes` (every scope),
+`result.order_ok` (the scopes in order), `result.order_bad` (the scopes out of order, each as `<scope>: <before span> at
+<unix nanos> is after <after span> at <unix nanos>`), `result.order_missing` (the scopes with no `before` or no `after`
+span). A bad regexp, or an `at` other than `start` or `end`, is a step error. Default assertion: `result.order_bad
+ShouldBeEmpty`; a step that lists its own assertions adds it itself, and adds `result.order_missing ShouldBeEmpty`
+when a scope with no span of an end is a failure. Point test: `executors/tempo/order_test.go`.
 
 ## Build
 

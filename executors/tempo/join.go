@@ -5,10 +5,12 @@ import (
 	"regexp"
 )
 
-// JoinSide picks values from a trace: of each span whose line (SpanLines) matches Match, the value of the attribute
-// whose key is Attr, and of that value the one group of Extract when Extract is given.
+// JoinSide picks values from a trace: of each span whose line (SpanLines) matches Match, and whose parent's line
+// matches Parent when Parent is given, the value of the attribute whose key is Attr, and of that value the one group
+// of Extract when Extract is given.
 type JoinSide struct {
 	Match   string `json:"match" yaml:"match" mapstructure:"match"`
+	Parent  string `json:"parent" yaml:"parent" mapstructure:"parent"`
 	Attr    string `json:"attr" yaml:"attr" mapstructure:"attr"`
 	Extract string `json:"extract" yaml:"extract" mapstructure:"extract"`
 }
@@ -54,12 +56,16 @@ func (j Join) Of(body []byte) (Joined, error) {
 	return out, nil
 }
 
-// values is the value of attribute Attr of each span whose line matches Match, in span start order; with Extract, its
-// one group, and a value Extract does not match is left out.
+// values is the value of attribute Attr of each span whose line matches Match (and whose parent's line matches
+// Parent), in span start order; with Extract, its one group, and a value Extract does not match is left out.
 func (s JoinSide) values(body []byte, side string) ([]string, error) {
 	match, err := regexp.Compile(s.Match)
 	if err != nil {
 		return nil, fmt.Errorf("tempo: join.%s.match %q: %w", side, s.Match, err)
+	}
+	parent, err := compile("join."+side+".parent", s.Parent)
+	if err != nil {
+		return nil, err
 	}
 	var extract *regexp.Regexp
 	if s.Extract != "" {
@@ -70,10 +76,10 @@ func (s JoinSide) values(body []byte, side string) ([]string, error) {
 			return nil, fmt.Errorf("tempo: join.%s.extract %q: want one group, got %d", side, s.Extract, extract.NumSubexp())
 		}
 	}
-	lines := SpanLines(body)
+	t := readTree(body)
 	var values []string
-	for i, sp := range readSpans(body) {
-		if !match.MatchString(lines[i]) {
+	for i, sp := range t.spans {
+		if !match.MatchString(t.lines[i]) || parent != nil && !parent.MatchString(t.lineOf(t.parent(i))) {
 			continue
 		}
 		for _, a := range sortedAttrs(sp) {
