@@ -104,7 +104,7 @@ Point test: `executors/http/parallel_test.go`.
 `{{hashids <salt> <min_length> <n>}}` encodes the number n by the hashids algorithm (default alphabet) on the salt
 and minimum length, as an API that hashes its ids and idempotency keys on a salt it gives out. Stock Venom has no such
 function, so a suite reads the salt by an `http` step, keeps it by `vars: from: result.bodyjson.<path>` and writes
-`X-Idempotency-Key: '{{hashids .salt 8 (randNumeric 15)}}'` instead of a script. An empty salt gives an empty string.
+`X-Idempotency-Key: '{{hashids .salt 8 .n}}'` with n from vars or an API answer instead of a script. An empty salt gives an empty string.
 Point test: `interpolate/hashids_test.go`.
 
 ## Build
