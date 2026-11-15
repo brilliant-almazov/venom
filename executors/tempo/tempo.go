@@ -5,7 +5,8 @@
 //
 // `contains`, `not_contains`, `matches` and `not_matches` check the saved trace with no shell, over one line per span
 // "<service> · <span> · <status> · <key>=<value> …" (SpanLines); result.mismatch names each item that does not hold.
-// `values_of` gives the attribute values of the matching spans (ValuesOf).
+// `values_of` gives the attribute values of the matching spans (ValuesOf). `join` pairs the values of two span sets of
+// the saved trace (Join, join.go) and result.join_missing names each left value with no right value.
 //
 // With `search` and no trace_id the step finds traces by the Tempo search API (search.go); with `traceql` it returns
 // the matched spans of a TraceQL query.
@@ -48,7 +49,7 @@ func New() venom.Executor {
 }
 
 // Executor saves one trace: trace_id, tempo_url, trace_dir, wait (seconds, default 20), and checks it by contains,
-// not_contains, matches and not_matches; or finds traces by search, or spans by traceql.
+// not_contains, matches, not_matches and join; or finds traces by search, or spans by traceql.
 type Executor struct {
 	TraceID  string `json:"trace_id" yaml:"trace_id" mapstructure:"trace_id"`
 	TempoURL string `json:"tempo_url" yaml:"tempo_url" mapstructure:"tempo_url"`
@@ -56,6 +57,7 @@ type Executor struct {
 	Wait     int    `json:"wait" yaml:"wait" mapstructure:"wait"`
 	Checks   `mapstructure:",squash"`
 	ValuesOf *ValuesOf `json:"values_of" yaml:"values_of" mapstructure:"values_of"`
+	Join     *Join     `json:"join" yaml:"join" mapstructure:"join"`
 	Search   *Search   `json:"search" yaml:"search" mapstructure:"search"`
 	// ContainsAny keeps the found traces with a span line that contains one of its items.
 	ContainsAny []string `json:"contains_any" yaml:"contains_any" mapstructure:"contains_any"`
@@ -78,6 +80,11 @@ type Result struct {
 	SpanNames string `json:"span_names,omitempty" yaml:"span_names,omitempty"`
 	SpanList  string `json:"span_list,omitempty" yaml:"span_list,omitempty"`
 	Count     int    `json:"count" yaml:"count"`
+	// JoinLeft, JoinRight, JoinPairs and JoinMissing (one value per line) are set by join.
+	JoinLeft    string `json:"join_left,omitempty" yaml:"join_left,omitempty"`
+	JoinRight   string `json:"join_right,omitempty" yaml:"join_right,omitempty"`
+	JoinPairs   string `json:"join_pairs,omitempty" yaml:"join_pairs,omitempty"`
+	JoinMissing string `json:"join_missing,omitempty" yaml:"join_missing,omitempty"`
 }
 
 // ZeroValueResult returns an empty result.
@@ -85,9 +92,10 @@ func (Executor) ZeroValueResult() interface{} {
 	return Result{}
 }
 
-// GetDefaultAssertions: the trace is saved and its checks hold.
+// GetDefaultAssertions: the trace is saved, its checks hold and every left value of join has a right value.
 func (Executor) GetDefaultAssertions() *venom.StepAssertions {
-	return &venom.StepAssertions{Assertions: []venom.Assertion{"result.trace_saved ShouldEqual yes", "result.mismatch ShouldBeEmpty"}}
+	return &venom.StepAssertions{Assertions: []venom.Assertion{"result.trace_saved ShouldEqual yes", "result.mismatch ShouldBeEmpty",
+		"result.join_missing ShouldBeEmpty"}}
 }
 
 // Run saves the trace.
@@ -114,7 +122,7 @@ func (Executor) Run(ctx context.Context, step venom.TestStep) (interface{}, erro
 	if saved == "yes" {
 		r.TreeFile = strings.TrimSuffix(file, ".json") + ".md"
 	}
-	if e.Checks.empty() && e.ValuesOf == nil {
+	if e.Checks.empty() && e.ValuesOf == nil && e.Join == nil {
 		return r, nil
 	}
 	if saved != "yes" {
@@ -131,7 +139,7 @@ func (Executor) Run(ctx context.Context, step venom.TestStep) (interface{}, erro
 	return r, nil
 }
 
-// check sets the mismatch of the checks and the values of values_of over one trace.
+// check sets the mismatch of the checks, the values of values_of and the values of join over one trace.
 func (e Executor) check(body []byte, r *Result) error {
 	mismatch, err := Mismatch(SpanLines(body), e.Checks)
 	if err != nil {
@@ -144,6 +152,14 @@ func (e Executor) check(body []byte, r *Result) error {
 			return err
 		}
 		r.Values = jsonList(values)
+	}
+	if e.Join != nil {
+		j, err := e.Join.Of(body)
+		if err != nil {
+			return err
+		}
+		r.JoinLeft, r.JoinRight = strings.Join(j.Left, "\n"), strings.Join(j.Right, "\n")
+		r.JoinPairs, r.JoinMissing = strings.Join(j.Pairs, "\n"), strings.Join(j.Missing, "\n")
 	}
 	return nil
 }

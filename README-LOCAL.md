@@ -389,6 +389,29 @@ Point test: `executors/rabbitmq/exchange_test.go`.
 `path` (required) is taken from the testsuite folder unless absolute; missing folders are made and an existing file is
 replaced. Result: `result.path` (absolute), `result.size`. Point test: `executors/writefile/writefile_test.go`.
 
+## 24. Two span sets of one trace joined: tempo `join`
+
+A `tempo` step with `trace_id` and `join` joins two span sets of the saved trace in Go, with no TraceQL. Each side
+takes the spans whose span line of section 13 matches `match` (Go regexp), the value of the attribute whose key is
+`attr` (the key as it is), and of that value the one group of `extract` (Go regexp with one group, optional; a value
+it does not match is left out):
+
+```yaml
+- type: tempo
+  trace_id: '{{.unit_trace}}'
+  tempo_url: '{{.tempo_url}}'
+  trace_dir: '{{.trace_dir}}'
+  join:
+    left:  {match: ' · Dial · ', attr: 'arg.req', extract: '"unit":"([^"]+)"'}
+    right: {match: 'INSERT INTO', attr: 'arg.3'}
+```
+
+Result, one value per line: `result.join_left` and `result.join_right` (the values found, in span order),
+`result.join_pairs` (the left values with an equal right value), `result.join_missing` (the left values with no equal
+right value, empty when every left value has one). A bad regexp, or an `extract` with other than one group, is a step
+error. Default assertion: `result.join_missing ShouldBeEmpty`; a step that lists its own assertions adds it itself.
+Point test: `executors/tempo/join_test.go`.
+
 ## Build
 
 ```bash
