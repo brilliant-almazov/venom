@@ -12,6 +12,14 @@ import (
 
 var interpolateRegex = regexp.MustCompile("({{[\\.\"a-zA-Z0-9._\\-µ|\\s]+}})")
 
+// templateWords are the actions and builtins of text/template: an expression made of them and known variables is a template
+// expression, not an unknown helper, so {{if eq .input.kind "x"}}…{{else}}…{{end}} of a user executor is kept as written.
+var templateWords = map[string]void{
+	"if": {}, "else": {}, "end": {}, "range": {}, "with": {}, "define": {}, "template": {}, "block": {}, "break": {},
+	"continue": {}, "and": {}, "or": {}, "not": {}, "eq": {}, "ne": {}, "lt": {}, "le": {}, "gt": {}, "ge": {}, "len": {},
+	"index": {}, "slice": {}, "print": {}, "printf": {}, "println": {}, "call": {}, "html": {}, "js": {}, "urlquery": {}, "-": {},
+}
+
 type void struct{}
 type val map[string]interface{}
 
@@ -105,7 +113,7 @@ func Do(input string, vars map[string]string) (string, error) {
 				}
 
 				for i, s := range splittedExpression {
-					splittedExpression[i] = strings.TrimSpace(s)
+					splittedExpression[i] = strings.Trim(strings.TrimSpace(s), "()")
 					if splittedExpression[i] == "" {
 						continue
 					}
@@ -144,6 +152,10 @@ func Do(input string, vars map[string]string) (string, error) {
 
 				unknownHelpers := make([]string, 0, 1000)
 				for h := range usedHelpers {
+					if _, word := templateWords[h]; word {
+						delete(usedHelpers, h)
+						continue
+					}
 					if _, is := InterpolateHelperFuncs[h]; !is {
 						unknownHelpers = append(unknownHelpers, h)
 					}

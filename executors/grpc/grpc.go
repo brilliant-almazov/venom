@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/fullstorydev/grpcurl"
@@ -24,6 +25,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/ovh/venom"
+	"github.com/ovh/venom/executors/tempo"
 )
 
 // Name for test exec
@@ -42,12 +44,40 @@ type Executor struct {
 	JSONDefaultFields    bool                   `json:"default_fields" yaml:"default_fields"`
 	IncludeTextSeparator bool                   `json:"include_text_separator" yaml:"include_text_separator"`
 	Data                 map[string]interface{} `json:"data" yaml:"data"`
-	Headers              map[string]string      `json:"headers" yaml:"headers"`
-	ConnectTimeout       *int64                 `json:"connect_timeout" yaml:"connect_timeout"`
-	TLSClientCert        string                 `json:"tls_client_cert" yaml:"tls_client_cert" mapstructure:"tls_client_cert"`
-	TLSClientKey         string                 `json:"tls_client_key" yaml:"tls_client_key" mapstructure:"tls_client_key"`
-	TLSRootCA            string                 `json:"tls_root_ca" yaml:"tls_root_ca" mapstructure:"tls_root_ca"`
-	IgnoreVerifySSL      bool                   `json:"ignore_verify_ssl" yaml:"ignore_verify_ssl" mapstructure:"ignore_verify_ssl"`
+	// DataJSON: the request as JSON text (a templated body, a client stream of one object per line); wins over Data.
+	DataJSON        string            `json:"data_json" yaml:"data_json" mapstructure:"data_json"`
+	Headers         map[string]string `json:"headers" yaml:"headers"`
+	ConnectTimeout  *int64            `json:"connect_timeout" yaml:"connect_timeout"`
+	TLSClientCert   string            `json:"tls_client_cert" yaml:"tls_client_cert" mapstructure:"tls_client_cert"`
+	TLSClientKey    string            `json:"tls_client_key" yaml:"tls_client_key" mapstructure:"tls_client_key"`
+	TLSRootCA       string            `json:"tls_root_ca" yaml:"tls_root_ca" mapstructure:"tls_root_ca"`
+	IgnoreVerifySSL bool              `json:"ignore_verify_ssl" yaml:"ignore_verify_ssl" mapstructure:"ignore_verify_ssl"`
+	// Trace: "auto" (a new W3C trace id) or a 32-hex trace id; sent as the traceparent header, returned as result.trace_id.
+	Trace string `json:"trace" yaml:"trace" mapstructure:"trace"`
+	// TempoURL and TraceDir: the trace of the call is saved to <trace_dir>/<trace_id>.json right after the answer
+	// (executors/tempo), waiting up to TraceWait seconds (default 20) for Tempo to ingest it.
+	TempoURL  string `json:"tempo_url" yaml:"tempo_url" mapstructure:"tempo_url"`
+	TraceDir  string `json:"trace_dir" yaml:"trace_dir" mapstructure:"trace_dir"`
+	TraceWait int    `json:"trace_wait" yaml:"trace_wait" mapstructure:"trace_wait"`
+	// HostSuffix is appended to a URL host without a dot: svc-tool-server:50051 + cgw-crawler-chain.orb.local gives
+	// svc-tool-server.cgw-crawler-chain.orb.local:50051 (OrbStack routes the host to compose services by that name).
+	HostSuffix string `json:"host_suffix" yaml:"host_suffix" mapstructure:"host_suffix"`
+	// ProtocolFile gets one JSON line per call: ts, case, trace_id, trace_file, trace_saved, call{method, addr, request,
+	// code, message, response}.
+	ProtocolFile string `json:"protocol_file" yaml:"protocol_file" mapstructure:"protocol_file"`
+	Case         string `json:"case" yaml:"case" mapstructure:"case"`
+	// Protoset (a FileDescriptorSet file, e.g. `buf build -o x.binpb`) or ProtoFiles with ImportPaths describe the service
+	// for a server without reflection; relative paths are taken from the testsuite folder.
+	Protoset    []string `json:"protoset" yaml:"protoset" mapstructure:"protoset"`
+	ProtoFiles  []string `json:"proto_files" yaml:"proto_files" mapstructure:"proto_files"`
+	ImportPaths []string `json:"import_paths" yaml:"import_paths" mapstructure:"import_paths"`
+	// Parallel: N > 1 sends the same request N times at once and returns a ParallelResult (codes, bodies,
+	// distinct_bodies, trace_ids and calls in call order; the first call as the plain fields).
+	Parallel int `json:"parallel" yaml:"parallel" mapstructure:"parallel"`
+	// RequestFromReflection builds the request message of the method from the descriptor source (BuildRequest), Fill
+	// giving the value of a field by its dot-separated path; data or data_json, when given, are merged over it.
+	RequestFromReflection bool              `json:"request_from_reflection" yaml:"request_from_reflection" mapstructure:"request_from_reflection"`
+	Fill                  map[string]string `json:"fill" yaml:"fill" mapstructure:"fill"`
 }
 
 // Result represents a step result
@@ -58,8 +88,15 @@ type Result struct {
 	SystemerrJSON interface{}   `json:"systemerrjson,omitempty" yaml:"systemerrjson,omitempty"`
 	Err           string        `json:"err,omitempty" yaml:"err,omitempty"`
 	Code          string        `json:"code,omitempty" yaml:"code,omitempty"`
+	Status        string        `json:"status,omitempty" yaml:"status,omitempty"`
+	Message       string        `json:"message,omitempty" yaml:"message,omitempty"`
 	Details       []interface{} `json:"details,omitempty" yaml:"details,omitempty"`
 	TimeSeconds   float64       `json:"timeseconds,omitempty" yaml:"timeseconds,omitempty"`
+	TraceID       string        `json:"trace_id,omitempty" yaml:"trace_id,omitempty"`
+	TraceSaved    string        `json:"trace_saved,omitempty" yaml:"trace_saved,omitempty"`
+	TraceFile     string        `json:"trace_file,omitempty" yaml:"trace_file,omitempty"`
+	// Request is the request message sent, as JSON.
+	Request interface{} `json:"request,omitempty" yaml:"request,omitempty"`
 }
 
 type customHandler struct {
@@ -106,6 +143,8 @@ func (c *customHandler) OnReceiveTrailers(stat *status.Status, met metadata.MD) 
 		}
 	}
 	c.target.Code = strconv.Itoa(int(uint32(stat.Code())))
+	c.target.Status = stat.Code().String()
+	c.target.Message = stat.Message()
 }
 
 // ZeroValueResult return an empty implementation of this executor result
@@ -122,12 +161,24 @@ func (Executor) GetDefaultAssertions() *venom.StepAssertions {
 func (Executor) Run(ctx context.Context, step venom.TestStep) (interface{}, error) {
 	// decode test
 	var e Executor
-	if err := mapstructure.Decode(step, &e); err != nil {
+	if err := mapstructure.WeakDecode(step, &e); err != nil {
 		return nil, err
+	}
+	if e.Parallel > 1 {
+		return runParallel(ctx, step, e.Parallel)
+	}
+
+	traceID := ""
+	if e.Trace != "" {
+		traceID = tempo.NewTraceID(e.Trace)
+		if e.Headers == nil {
+			e.Headers = map[string]string{}
+		}
+		e.Headers["traceparent"] = "00-" + traceID + "-" + tempo.NewSpanID() + "-01"
 	}
 
 	// prepare headers
-	headers := make([]string, len(e.Headers))
+	headers := make([]string, 0, len(e.Headers))
 	for k, v := range e.Headers {
 		headers = append(headers, fmt.Sprintf("%s: %s", k, v))
 	}
@@ -137,6 +188,15 @@ func (Executor) Run(ctx context.Context, step venom.TestStep) (interface{}, erro
 	if err != nil {
 		return nil, fmt.Errorf("runGrpcurl: Cannot marshal request data: %s", err)
 	}
+	if e.DataJSON != "" {
+		data = []byte(e.DataJSON)
+	}
+	if e.Service == "" {
+		if i := strings.LastIndex(e.Method, "/"); i > 0 {
+			e.Service, e.Method = e.Method[:i], e.Method[i+1:]
+		}
+	}
+	e.URL = withHostSuffix(e.URL, e.HostSuffix)
 
 	result := Result{}
 	start := time.Now()
@@ -240,8 +300,14 @@ func (Executor) Run(ctx context.Context, step venom.TestStep) (interface{}, erro
 	if err != nil {
 		return Result{Err: err.Error()}, fmt.Errorf("grpc dial error: %w", err)
 	}
-	refClient = grpcreflect.NewClientAuto(refCtx, cc)
-	descSource = grpcurl.DescriptorSourceFromServer(ctx, refClient)
+	if src, err := e.fileSource(venom.StringVarFromCtx(ctx, "venom.testsuite.workdir")); err != nil {
+		return nil, err
+	} else if src != nil {
+		descSource = src
+	} else {
+		refClient = grpcreflect.NewClientAuto(refCtx, cc)
+		descSource = grpcurl.DescriptorSourceFromServer(ctx, refClient)
+	}
 
 	// arrange for the RPCs to be cleanly shutdown
 	defer func() {
@@ -254,6 +320,20 @@ func (Executor) Run(ctx context.Context, step venom.TestStep) (interface{}, erro
 			cc = nil
 		}
 	}()
+
+	if e.RequestFromReflection {
+		over := data
+		if e.DataJSON == "" && len(e.Data) == 0 {
+			over = nil
+		}
+		if data, err = requestFromReflection(descSource, e.Service, e.Method, e.Fill, over); err != nil {
+			return nil, err
+		}
+	}
+	var sent interface{}
+	if venom.JSONUnmarshal(data, &sent) == nil {
+		result.Request = sent
+	}
 
 	// prepare request and send
 	in := bytes.NewReader(data)
@@ -277,6 +357,17 @@ func (Executor) Run(ctx context.Context, step venom.TestStep) (interface{}, erro
 
 	// invoke the gRPC
 	err = grpcurl.InvokeRPC(ctx, descSource, cc, e.Service+"/"+e.Method, headers, &handle, rf.Next)
+	if traceID != "" {
+		result.TraceID = traceID
+		wait := time.Duration(e.TraceWait) * time.Second
+		if e.TraceWait <= 0 {
+			wait = 20 * time.Second
+		}
+		result.TraceSaved, result.TraceFile, _ = tempo.Save(ctx, e.TempoURL, e.TraceDir, traceID, wait)
+	}
+	if e.ProtocolFile != "" {
+		writeProtocol(e, data, &result, err)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("grpcurl.InvokeRPC() failed.\nUrl: %q\nService: %q\nMethod: %q\nData:%v: %v", e.URL, e.Service, e.Method, e.Data, err)
 	}

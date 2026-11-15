@@ -154,6 +154,8 @@ type TestCaseInput struct {
 	Skip         []string          `json:"skip" yaml:"skip"`
 	RawTestSteps []json.RawMessage `json:"steps" yaml:"steps"`
 	ID           string            `json:"id" yaml:"id"`
+	// Info lines of the testcase itself, "key: value", printed into its protocol with the info lines of its steps.
+	Info []string `json:"info" yaml:"info"`
 }
 
 type TestCase struct {

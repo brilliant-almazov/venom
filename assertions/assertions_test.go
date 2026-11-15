@@ -2472,3 +2472,15 @@ func TestRegisterUserAssertFunc(t *testing.T) {
 		})
 	}
 }
+
+func TestShouldNotMatchRegex(t *testing.T) {
+	if err := ShouldNotMatchRegex("wait|3", "^wait"); err == nil {
+		t.Error("a match must fail")
+	}
+	if err := ShouldNotMatchRegex("seen|3", "^wait"); err != nil {
+		t.Errorf("no match must pass: %v", err)
+	}
+	if err := ShouldNotMatchRegex("x", "("); err == nil {
+		t.Error("a bad pattern must fail")
+	}
+}
