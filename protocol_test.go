@@ -258,3 +258,41 @@ func TestProtocolFileNameKeepsRowID(t *testing.T) {
 	assert.Equal(t, "S-001-CreateAccount", protocolFileName("S-001: CreateAccount"))
 	assert.Equal(t, "testcase", protocolFileName(" / "))
 }
+
+func TestProtocolPresenceTemplateShape(t *testing.T) {
+	dir := runProtocolSuite(t, `name: suite
+testcases:
+- name: held
+`+testcaseInfo+`  steps:
+  - type: caller
+    code: 200
+    trace_dir: %[1]s
+    info:
+    - "precondition: account id=7 есть — чтение до проверяемого вызова"
+  - type: checker
+    out: "1"
+    assertions:
+    - systemout ShouldNotEqual 0
+  - type: caller
+    code: 200
+    url: /v1/billing/accounts/7
+- name: broken
+  steps:
+  - type: caller
+    code: 200
+    info:
+    - "precondition: account id=7 есть — чтение до проверяемого вызова"
+  - type: checker
+    out: "0"
+    assertions:
+    - systemout ShouldNotEqual 0
+  - type: caller
+    code: 200
+    url: /v1/billing/accounts/7
+`, false)
+	h := readProtocol(t, dir, "held")
+	assert.Contains(t, h, "| account | `id=7` | `caller` | данные есть ✅ |")
+	assert.Contains(t, h, "`7` ✅ отправлен")
+	b := readProtocol(t, dir, "broken")
+	assert.Contains(t, b, "данные есть ❌ не подтверждено", "the check after the read fails the precondition")
+}

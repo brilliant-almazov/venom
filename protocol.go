@@ -150,22 +150,53 @@ func protocolKeys(b *strings.Builder, info map[string][]string, keys ...string) 
 // «данные есть: <entity> · <key>» or «данных нет: <entity> · <key>».
 var protocolPresence = regexp.MustCompile(`(?:^|:\s*)(данные есть|данных нет)\s*:\s*(.+?)\s*·\s*(.+?)(?:\s+\([^()]+:\d+\))?\s*$`)
 
+// protocolPreconditionLine reads the precondition line of the scenario template (scenarios/TEMPLATE.*.yml of
+// cgw-qa-scenarios): "precondition: <entity> <key> есть|нет — <what is read>".
+var protocolPreconditionLine = regexp.MustCompile(`^\s*precondition\s*:\s*(\S+)\s+(.+?)\s+(есть|нет)(?:\s+—.*?)?(?:\s+\([^()]+:\d+\))?\s*$`)
+
 type protocolPresenceRow struct {
 	entity, key, presence string
 	step                  int
 }
 
-// protocolPresenceRows are the precondition rows of the testcase, one per info line with the fixed prefix.
+// protocolPresenceRows are the precondition rows of the testcase, one per precondition info line.
 func protocolPresenceRows(tc *TestCase) []protocolPresenceRow {
 	var rows []protocolPresenceRow
 	for i, r := range tc.TestStepResults {
 		for _, l := range r.ComputedInfo {
 			if m := protocolPresence.FindStringSubmatch(l); m != nil {
 				rows = append(rows, protocolPresenceRow{entity: m[2], key: m[3], presence: m[1], step: i})
+			} else if m := protocolPreconditionLine.FindStringSubmatch(l); m != nil {
+				presence := "данные есть"
+				if m[3] == "нет" {
+					presence = "данных нет"
+				}
+				rows = append(rows, protocolPresenceRow{entity: m[1], key: m[2], presence: presence, step: i})
 			}
 		}
 	}
 	return rows
+}
+
+// protocolPreconditionHeld is false when the precondition read or a check after it failed: the steps from the read up
+// to the next call (a step with a trace_id and a code), as the template checks the read in separate steps after its
+// trace_save.
+func protocolPreconditionHeld(tc *TestCase, step int) bool {
+	for i := step; i < len(tc.TestStepResults); i++ {
+		r := &tc.TestStepResults[i]
+		if i > step && protocolIsCall(r) {
+			break
+		}
+		if r.Status == StatusFail {
+			return false
+		}
+	}
+	return true
+}
+
+func protocolIsCall(r *TestStepResult) bool {
+	_, traced := r.ComputedVars["result.trace_id"]
+	return traced && protocolHasCode(r)
 }
 
 // protocolPresenceTable is the section «Наличие данных»: entity, key, the precondition request, presence with ✅ when
@@ -179,7 +210,7 @@ func protocolPresenceTable(tc *TestCase, rows []protocolPresenceRow, call *TestS
 	for _, row := range rows {
 		r := &tc.TestStepResults[row.step]
 		mark := "✅"
-		if r.Status == StatusFail {
+		if !protocolPreconditionHeld(tc, row.step) {
 			mark = "❌ не подтверждено"
 		}
 		trace := "—"
@@ -247,12 +278,12 @@ func protocolRequest(r *TestStepResult) string {
 func protocolLastCall(tc *TestCase, rows []protocolPresenceRow) (*TestStepResult, int) {
 	precondition := map[int]bool{}
 	for _, row := range rows {
-		precondition[row.step] = true
+		precondition[row.step] = protocolPreconditionHeld(tc, row.step)
 	}
 	traced, coded := -1, -1
 	for i := len(tc.TestStepResults) - 1; i >= 0; i-- {
 		r := &tc.TestStepResults[i]
-		if !protocolHasCode(r) || (precondition[i] && r.Status != StatusFail) {
+		if held, ok := precondition[i]; !protocolHasCode(r) || (ok && held) {
 			continue
 		}
 		if _, ok := r.ComputedVars["result.trace_id"]; ok {
