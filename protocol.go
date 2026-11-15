@@ -77,6 +77,7 @@ func protocolText(ts *TestSuite, tc *TestCase) string {
 
 	b.WriteString("\n" + protocolHeadRequest + "\n\n")
 	protocolKeys(&b, info, "point")
+	b.WriteString(protocolWaits(tc))
 	if call == nil {
 		b.WriteString("- call: the testcase has no call\n")
 	} else {
@@ -293,6 +294,23 @@ func protocolField(v interface{}) string {
 		return ""
 	}
 	return fmt.Sprint(v)
+}
+
+// protocolWaits lists the wait steps of the testcase, each with its seconds and reason.
+func protocolWaits(tc *TestCase) string {
+	var b strings.Builder
+	for i := range tc.TestStepResults {
+		m := protocolStep(&tc.TestStepResults[i])
+		if protocolField(m["type"]) != "wait" {
+			continue
+		}
+		reason := protocolField(m["reason"])
+		if reason == "" {
+			reason = protocolNoReason
+		}
+		fmt.Fprintf(&b, protocolWaitLine+"\n", i+1, protocolField(m["seconds"]), reason)
+	}
+	return b.String()
 }
 
 // protocolLastCall is the call of the testcase, a passed precondition read left out, among the steps with a «call:» info

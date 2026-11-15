@@ -191,6 +191,19 @@ this file under Trace and the trace gate fails a call whose tree is missing. Res
 `result.trace_saved` (`yes`, `late`, `no`), `result.trace_file`, `result.tree_file`, `result.spans`. Point test:
 `executors/tempo/tempo_test.go`.
 
+## 14. A wait with no shell: `type: wait`
+
+```yaml
+- type: wait
+  seconds: '{{.absence_window_s}}'
+  reason: the absence window before the read
+```
+
+`seconds` is a number or an interpolated string, fractions allowed, not negative; `reason` is optional. Result:
+`result.seconds`, `result.reason`. No call, no trace_id, no default assertion; the wait ends early when the testcase
+context is done. The protocol prints each wait under Request as `- wait: step N, <seconds> s, <reason>`. Point tests:
+`executors/wait/wait_test.go`, `TestProtocolWaitLine`.
+
 ## Build
 
 ```bash

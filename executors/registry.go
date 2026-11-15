@@ -24,6 +24,7 @@ import (
 	"github.com/ovh/venom/executors/sql"
 	"github.com/ovh/venom/executors/ssh"
 	"github.com/ovh/venom/executors/tempo"
+	"github.com/ovh/venom/executors/wait"
 	"github.com/ovh/venom/executors/web"
 )
 

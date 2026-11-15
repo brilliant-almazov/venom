@@ -75,6 +75,7 @@ func runProtocolSuite(t *testing.T, suite string, stopOnFailure bool) string {
 	v.RegisterExecutorBuiltin("caller", callExecutor{})
 	v.RegisterExecutorBuiltin("checker", checkExecutor{})
 	v.RegisterExecutorBuiltin("gateway", gatewayExecutor{})
+	v.RegisterExecutorBuiltin("wait", waitExecutor{})
 	v.OutputDir = dir
 	v.ProtocolDir = filepath.Join(dir, "protocols")
 	v.StopOnFailure = stopOnFailure
@@ -428,4 +429,31 @@ testcases:
 	assert.Contains(t, s, "- call: `caller action=service on args=svc-billing-server --apply env=stand-1`")
 	assert.Contains(t, s, "- action: service on\n- args: svc-billing-server --apply\n- env: stand-1\n")
 	assert.NotContains(t, s, "grep")
+}
+
+// waitExecutor stands for the wait executor of executors/wait, which the root package cannot import.
+type waitExecutor struct{}
+
+func (waitExecutor) Run(_ context.Context, _ TestStep) (interface{}, error) {
+	return map[string]interface{}{}, nil
+}
+
+func TestProtocolWaitLine(t *testing.T) {
+	dir := runProtocolSuite(t, `name: suite
+testcases:
+- name: waited
+`+testcaseInfo+`  steps:
+  - type: wait
+    seconds: "0.01"
+    reason: the absence window before the read
+  - type: wait
+    seconds: 2
+  - type: caller
+    code: 200
+    trace_dir: %s
+`, false)
+	p := readProtocol(t, dir, "waited")
+	req := p[strings.Index(p, protocolHeadRequest):strings.Index(p, protocolHeadAnswer)]
+	assert.Contains(t, req, fmt.Sprintf(protocolWaitLine, 1, "0.01", "the absence window before the read"))
+	assert.Contains(t, req, fmt.Sprintf(protocolWaitLine, 2, "2", protocolNoReason))
 }

@@ -30,4 +30,6 @@ const (
 	protocolMasked         = "*** (%d chars)"
 	protocolNoTrace        = "no trace"
 	protocolNoTree         = "- no tree:"
+	protocolWaitLine       = "- wait: step %d, %s s, %s"
+	protocolNoReason       = "no reason given"
 )
