@@ -6,7 +6,9 @@
 // `contains`, `not_contains`, `matches` and `not_matches` check the saved trace with no shell, over one line per span
 // "<service> · <span> · <status> · <key>=<value> …" (SpanLines); result.mismatch names each item that does not hold.
 // `values_of` gives the attribute values of the matching spans (ValuesOf). `join` pairs the values of two span sets of
-// the saved trace (Join, join.go) and result.join_missing names each left value with no right value.
+// the saved trace (Join, join.go) and result.join_missing names each left value with no right value. `order` checks the
+// order of spans in each subtree of the saved trace (Order, order.go) and result.order_bad names each subtree out of
+// order.
 //
 // With `search` and no trace_id the step finds traces by the Tempo search API (search.go); with `traceql` it returns
 // the matched spans of a TraceQL query.
@@ -49,7 +51,7 @@ func New() venom.Executor {
 }
 
 // Executor saves one trace: trace_id, tempo_url, trace_dir, wait (seconds, default 20), and checks it by contains,
-// not_contains, matches, not_matches and join; or finds traces by search, or spans by traceql.
+// not_contains, matches, not_matches, join and order; or finds traces by search, or spans by traceql.
 type Executor struct {
 	TraceID  string `json:"trace_id" yaml:"trace_id" mapstructure:"trace_id"`
 	TempoURL string `json:"tempo_url" yaml:"tempo_url" mapstructure:"tempo_url"`
@@ -58,6 +60,7 @@ type Executor struct {
 	Checks   `mapstructure:",squash"`
 	ValuesOf *ValuesOf `json:"values_of" yaml:"values_of" mapstructure:"values_of"`
 	Join     *Join     `json:"join" yaml:"join" mapstructure:"join"`
+	Order    *Order    `json:"order" yaml:"order" mapstructure:"order"`
 	Search   *Search   `json:"search" yaml:"search" mapstructure:"search"`
 	// ContainsAny keeps the found traces with a span line that contains one of its items.
 	ContainsAny []string `json:"contains_any" yaml:"contains_any" mapstructure:"contains_any"`
@@ -85,6 +88,11 @@ type Result struct {
 	JoinRight   string `json:"join_right,omitempty" yaml:"join_right,omitempty"`
 	JoinPairs   string `json:"join_pairs,omitempty" yaml:"join_pairs,omitempty"`
 	JoinMissing string `json:"join_missing,omitempty" yaml:"join_missing,omitempty"`
+	// OrderScopes, OrderOK, OrderBad and OrderMissing (one item per line) are set by order.
+	OrderScopes  string `json:"order_scopes,omitempty" yaml:"order_scopes,omitempty"`
+	OrderOK      string `json:"order_ok,omitempty" yaml:"order_ok,omitempty"`
+	OrderBad     string `json:"order_bad,omitempty" yaml:"order_bad,omitempty"`
+	OrderMissing string `json:"order_missing,omitempty" yaml:"order_missing,omitempty"`
 }
 
 // ZeroValueResult returns an empty result.
@@ -92,10 +100,11 @@ func (Executor) ZeroValueResult() interface{} {
 	return Result{}
 }
 
-// GetDefaultAssertions: the trace is saved, its checks hold and every left value of join has a right value.
+// GetDefaultAssertions: the trace is saved, its checks hold, every left value of join has a right value and every
+// subtree of order is in order.
 func (Executor) GetDefaultAssertions() *venom.StepAssertions {
 	return &venom.StepAssertions{Assertions: []venom.Assertion{"result.trace_saved ShouldEqual yes", "result.mismatch ShouldBeEmpty",
-		"result.join_missing ShouldBeEmpty"}}
+		"result.join_missing ShouldBeEmpty", "result.order_bad ShouldBeEmpty"}}
 }
 
 // Run saves the trace.
@@ -122,7 +131,7 @@ func (Executor) Run(ctx context.Context, step venom.TestStep) (interface{}, erro
 	if saved == "yes" {
 		r.TreeFile = strings.TrimSuffix(file, ".json") + ".md"
 	}
-	if e.Checks.empty() && e.ValuesOf == nil && e.Join == nil {
+	if e.Checks.empty() && e.ValuesOf == nil && e.Join == nil && e.Order == nil {
 		return r, nil
 	}
 	if saved != "yes" {
@@ -139,7 +148,8 @@ func (Executor) Run(ctx context.Context, step venom.TestStep) (interface{}, erro
 	return r, nil
 }
 
-// check sets the mismatch of the checks, the values of values_of and the values of join over one trace.
+// check sets the mismatch of the checks, the values of values_of, the values of join and the subtrees of order over one
+// trace.
 func (e Executor) check(body []byte, r *Result) error {
 	mismatch, err := Mismatch(SpanLines(body), e.Checks)
 	if err != nil {
@@ -160,6 +170,14 @@ func (e Executor) check(body []byte, r *Result) error {
 		}
 		r.JoinLeft, r.JoinRight = strings.Join(j.Left, "\n"), strings.Join(j.Right, "\n")
 		r.JoinPairs, r.JoinMissing = strings.Join(j.Pairs, "\n"), strings.Join(j.Missing, "\n")
+	}
+	if e.Order != nil {
+		o, err := e.Order.Of(body)
+		if err != nil {
+			return err
+		}
+		r.OrderScopes, r.OrderOK = strings.Join(o.Scopes, "\n"), strings.Join(o.OK, "\n")
+		r.OrderBad, r.OrderMissing = strings.Join(o.Bad, "\n"), strings.Join(o.Missing, "\n")
 	}
 	return nil
 }
