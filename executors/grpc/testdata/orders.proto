@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package demo.v1;
+
+message Item {
+  string id = 1;
+  string text = 2;
+}
+
+message PlaceRequest {
+  string source = 1;
+  repeated Item items = 2;
+}
+
+message PlaceReply {}
+
+service Orders {
+  rpc Place(PlaceRequest) returns (PlaceReply);
+}

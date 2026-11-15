@@ -78,6 +78,9 @@ type Executor struct {
 	// giving the value of a field by its dot-separated path; data or data_json, when given, are merged over it.
 	RequestFromReflection bool              `json:"request_from_reflection" yaml:"request_from_reflection" mapstructure:"request_from_reflection"`
 	Fill                  map[string]string `json:"fill" yaml:"fill" mapstructure:"fill"`
+	// DataRepeat sets one request field to N items built from a template (DataRepeat.Expand); the result then keeps
+	// only request_size and request_sha256 of the request, not the request itself.
+	DataRepeat *DataRepeat `json:"data_repeat" yaml:"data_repeat" mapstructure:"data_repeat"`
 }
 
 // Result represents a step result
@@ -95,8 +98,11 @@ type Result struct {
 	TraceID       string        `json:"trace_id,omitempty" yaml:"trace_id,omitempty"`
 	TraceSaved    string        `json:"trace_saved,omitempty" yaml:"trace_saved,omitempty"`
 	TraceFile     string        `json:"trace_file,omitempty" yaml:"trace_file,omitempty"`
-	// Request is the request message sent, as JSON.
+	// Request is the request message sent, as JSON; left out with data_repeat.
 	Request interface{} `json:"request,omitempty" yaml:"request,omitempty"`
+	// RequestSize and RequestSHA256 are the size in bytes and the sha256 of the request body sent.
+	RequestSize   int    `json:"request_size,omitempty" yaml:"request_size,omitempty"`
+	RequestSHA256 string `json:"request_sha256,omitempty" yaml:"request_sha256,omitempty"`
 }
 
 type customHandler struct {
@@ -330,10 +336,17 @@ func (Executor) Run(ctx context.Context, step venom.TestStep) (interface{}, erro
 			return nil, err
 		}
 	}
-	var sent interface{}
-	if venom.JSONUnmarshal(data, &sent) == nil {
-		result.Request = sent
+	if e.DataRepeat != nil {
+		if data, err = e.DataRepeat.Expand(data); err != nil {
+			return nil, err
+		}
+	} else {
+		var sent interface{}
+		if venom.JSONUnmarshal(data, &sent) == nil {
+			result.Request = sent
+		}
 	}
+	result.RequestSize, result.RequestSHA256 = digest(data)
 
 	// prepare request and send
 	in := bytes.NewReader(data)
