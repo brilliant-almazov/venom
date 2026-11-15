@@ -62,27 +62,27 @@ func protocolText(ts *TestSuite, tc *TestCase) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "# %s\n\nФайл: `%s`\n\n", tc.Name, ts.Filepath)
 
-	b.WriteString("## Правильное поведение\n\n")
+	b.WriteString(protocolHeadRight + "\n\n")
 	protocolKeys(&b, info, "happens", "expect", "right", "norm")
 
-	b.WriteString("\n## Что неправильно\n\n")
+	b.WriteString("\n" + protocolHeadWrong + "\n\n")
 	protocolKeys(&b, info, "wrong")
 
 	rows := protocolPresenceRows(tc)
 	call, n := protocolLastCall(tc, rows)
-	b.WriteString("\n## Наличие данных\n\n")
+	b.WriteString("\n" + protocolHeadPresence + "\n\n")
 	b.WriteString(protocolPresenceTable(tc, rows, call))
 
-	b.WriteString("\n## Запрос\n\n")
+	b.WriteString("\n" + protocolHeadRequest + "\n\n")
 	protocolKeys(&b, info, "point", "call")
 	if call == nil {
 		b.WriteString("- результат вызова: вызова в testcase нет\n")
 	} else {
-		fmt.Fprintf(&b, "- шаг: %d «%s»\n", n+1, call.Name)
+		fmt.Fprintf(&b, protocolStepLine+"\n", n+1, call.Name)
 		b.WriteString(protocolRequestBlock(call))
 	}
 
-	b.WriteString("\n## Ответ\n\n")
+	b.WriteString("\n" + protocolHeadAnswer + "\n\n")
 	if call == nil {
 		b.WriteString("- вызова в testcase нет\n")
 	} else {
@@ -92,13 +92,13 @@ func protocolText(ts *TestSuite, tc *TestCase) string {
 		fmt.Fprintf(&b, "- fact: %s\n", f)
 	}
 
-	b.WriteString("\n## Состояние после вызова\n\n")
+	b.WriteString("\n" + protocolHeadAfter + "\n\n")
 	b.WriteString(protocolAfter(tc, call, n))
 
-	b.WriteString("\n## Трасса\n\n")
+	b.WriteString("\n" + protocolHeadTrace + "\n\n")
 	b.WriteString(protocolTrace(tc, call))
 
-	b.WriteString("\n## Вердикт\n\n")
+	b.WriteString("\n" + protocolHeadVerdict + "\n\n")
 	b.WriteString(protocolVerdict(tc))
 	return b.String()
 }
@@ -173,9 +173,9 @@ func protocolPresenceRows(tc *TestCase) []protocolPresenceRow {
 	for i, r := range tc.TestStepResults {
 		for _, l := range r.ComputedInfo {
 			if m := protocolPreconditionLine.FindStringSubmatch(l); m != nil {
-				presence := "данные есть"
-				if m[3] == "нет" {
-					presence = "данных нет"
+				presence := protocolDataPresent
+				if m[3] == protocolWordAbsent {
+					presence = protocolDataAbsent
 				}
 				rows = append(rows, protocolPresenceRow{entity: m[1], key: m[2], presence: presence, step: i})
 			}
@@ -208,15 +208,15 @@ func protocolIsCall(r *TestStepResult) bool {
 // the assertions of that read held and ❌ when they did not, its trace, and whether the tested call sent that key.
 func protocolPresenceTable(tc *TestCase, rows []protocolPresenceRow, call *TestStepResult) string {
 	if len(rows) == 0 {
-		return "предусловия нет\n"
+		return protocolNoPrecondition + "\n"
 	}
 	var b strings.Builder
-	b.WriteString("| сущность | ключ | запрос | есть/нет | trace id | ключ в проверяемом вызове |\n| -- | -- | -- | -- | -- | -- |\n")
+	b.WriteString(protocolPresenceHeader + "\n| -- | -- | -- | -- | -- | -- |\n")
 	for _, row := range rows {
 		r := &tc.TestStepResults[row.step]
 		mark := "✅"
 		if !protocolPreconditionHeld(tc, row.step) {
-			mark = "❌ не подтверждено"
+			mark = protocolNotConfirmed
 		}
 		trace := "—"
 		if id := protocolTraceID(r); id != "" {
@@ -243,9 +243,9 @@ func protocolSentKey(key string, call, precondition *TestStepResult) string {
 	delete(req, "assertions")
 	delete(req, "vars")
 	if value != "" && strings.Contains(fmt.Sprint(req), value) {
-		return fmt.Sprintf("`%s` ✅ отправлен: %s", value, protocolRequest(call))
+		return fmt.Sprintf("`%s` "+protocolKeySent+": %s", value, protocolRequest(call))
 	}
-	return fmt.Sprintf("`%s` ❌ не отправлен: %s", value, protocolRequest(call))
+	return fmt.Sprintf("`%s` "+protocolKeyNotSent+": %s", value, protocolRequest(call))
 }
 
 // protocolStep is the step after interpolation; Interpolated holds it as YAML bytes (process_testcase.go).
@@ -351,11 +351,11 @@ func protocolBody(r *TestStepResult) string {
 // traces the steps of the testcase were given.
 func protocolTrace(tc *TestCase, call *TestStepResult) string {
 	if call == nil {
-		return "- трассы нет: вызова в testcase нет\n"
+		return "- " + protocolNoTrace + ": вызова в testcase нет\n"
 	}
 	id := protocolTraceID(call)
 	if id == "" {
-		return "- трассы нет: вызов не вернул trace_id ни в результате, ни в заголовке X-Trace-Id, ни в meta.trace_id тела\n"
+		return "- " + protocolNoTrace + ": вызов не вернул trace_id ни в результате, ни в заголовке X-Trace-Id, ни в meta.trace_id тела\n"
 	}
 	f, tried := protocolTreeFile(tc, id)
 	if f != "" {
@@ -365,9 +365,9 @@ func protocolTrace(tc *TestCase, call *TestStepResult) string {
 		}
 	}
 	if len(tried) == 0 {
-		return fmt.Sprintf("- trace_id: %s\n- дерева нет: ни один шаг не получил trace_dir или traces\n", id)
+		return fmt.Sprintf("- trace_id: %s\n"+protocolNoTree+" ни один шаг не получил trace_dir или traces\n", id)
 	}
-	return fmt.Sprintf("- trace_id: %s\n- дерева нет: %s\n", id, strings.Join(tried, ", "))
+	return fmt.Sprintf("- trace_id: %s\n"+protocolNoTree+" %s\n", id, strings.Join(tried, ", "))
 }
 
 func protocolTraceDirs(tc *TestCase) []string {
@@ -390,9 +390,9 @@ func protocolVerdict(tc *TestCase) string {
 	var b strings.Builder
 	switch tc.Status {
 	case StatusPass:
-		b.WriteString("✅ пройден\n")
+		b.WriteString(protocolPassed + "\n")
 	case StatusSkip:
-		b.WriteString("⏭ пропущен\n")
+		b.WriteString(protocolSkipped + "\n")
 		for _, s := range tc.Skipped {
 			fmt.Fprintf(&b, "- %s\n", s.Value)
 		}
@@ -402,7 +402,7 @@ func protocolVerdict(tc *TestCase) string {
 			}
 		}
 	default:
-		b.WriteString("❌ не пройден\n")
+		b.WriteString(protocolFailed + "\n")
 		for i, r := range tc.TestStepResults {
 			for _, e := range r.Errors {
 				fmt.Fprintf(&b, "- шаг %d «%s»: %s\n", i+1, r.Name, e.Value)

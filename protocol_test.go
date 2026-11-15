@@ -114,9 +114,9 @@ testcases:
     - result.statuscode ShouldEqual 200
 `, false)
 	p := readProtocol(t, dir, "green")
-	for _, want := range []string{"## Правильное поведение", "- expect: the account is read", "- right: statuscode 200", "- norm: cgw-billing: docs/api.md:12",
-		"## Что неправильно", "- wrong: any other statuscode", "## Запрос", "## Ответ", "## Состояние после вызова", "- call: GET /v1/billing/accounts/1", "- statuscode: 200",
-		"## Трасса", "svc-billing ✅ GetAccount", "## Вердикт", "✅ пройден"} {
+	for _, want := range []string{protocolHeadRight, "- expect: the account is read", "- right: statuscode 200", "- norm: cgw-billing: docs/api.md:12",
+		protocolHeadWrong, "- wrong: any other statuscode", protocolHeadRequest, protocolHeadAnswer, protocolHeadAfter, "- call: GET /v1/billing/accounts/1", "- statuscode: 200",
+		protocolHeadTrace, "svc-billing ✅ GetAccount", protocolHeadVerdict, protocolPassed} {
 		assert.Contains(t, p, want)
 	}
 }
@@ -135,7 +135,7 @@ testcases:
     code: 200
 `, false)
 	p := readProtocol(t, dir, "must")
-	assert.Contains(t, p, "❌ не пройден")
+	assert.Contains(t, p, protocolFailed)
 	assert.Contains(t, p, "result.statuscode MustEqual 200")
 	assert.Contains(t, p, "- statuscode: 500")
 	assert.Contains(t, p, "svc-billing ✅ GetAccount")
@@ -157,10 +157,10 @@ testcases:
     code: 200
 `, true)
 	first := readProtocol(t, dir, "first")
-	assert.Contains(t, first, "❌ не пройден")
+	assert.Contains(t, first, protocolFailed)
 	assert.Contains(t, first, "result.statuscode ShouldEqual 200")
 	second := readProtocol(t, dir, "second")
-	assert.Contains(t, second, "⏭ пропущен")
+	assert.Contains(t, second, protocolSkipped)
 	assert.Contains(t, second, "stop-on-failure")
 }
 
@@ -183,9 +183,9 @@ testcases:
     - "fact: got={{.got}}"
 `, false)
 	p := readProtocol(t, dir, "should")
-	assert.Contains(t, p, "❌ не пройден")
+	assert.Contains(t, p, protocolFailed)
 	assert.Contains(t, p, "result.statuscode ShouldEqual 200")
-	assert.Contains(t, p, "## Ответ\n\n- statuscode: 422", "the failed call is the fact even though its vars were skipped")
+	assert.Contains(t, p, protocolHeadAnswer+"\n\n- statuscode: 422", "the failed call is the fact even though its vars were skipped")
 	assert.Contains(t, p, "svc-billing ✅ GetAccount")
 }
 
@@ -206,7 +206,7 @@ testcases:
     - systemout ShouldEqual 200
 `, false)
 	p := readProtocol(t, dir, "template")
-	assert.Contains(t, p, "❌ не пройден")
+	assert.Contains(t, p, protocolFailed)
 	assert.Contains(t, p, "systemout ShouldEqual 200")
 	assert.Contains(t, p, "- statuscode: 404", "the call is the fact, not the check step after it")
 	assert.Contains(t, p, "svc-billing ✅ GetAccount")
@@ -221,22 +221,22 @@ testcases:
     trace_dir: %[1]s
     info:
     - "call: GET /v1/billing/accounts/7"
-    - "precondition: account · id=7 есть — чтение до проверяемого вызова"
-    - "expect: данные есть: account · id=7 — счёт читается"
+    - "precondition: account · id=7 ` + protocolWordPresent + `"
+    - "expect: ` + protocolDataPresent + `: account · id=7, the account is read"
     assertions:
     - result.statuscode MustEqual 200
   - type: caller
     code: 200
     url: /v1/billing/accounts/7/entries
     info:
-    - "expect: данные есть: account · id=7 — записи счёта читаются"
+    - "expect: ` + protocolDataPresent + `: account · id=7, the entries are read"
 - name: absent
   steps:
   - type: caller
     code: 404
     info:
     - "call: GET /v1/billing/accounts/9223372036854775807"
-    - "precondition: account · id=9223372036854775807 нет — чтение до проверяемого вызова"
+    - "precondition: account · id=9223372036854775807 ` + protocolWordAbsent + `"
     assertions:
     - result.statuscode MustEqual 404
   - type: caller
@@ -247,7 +247,7 @@ testcases:
   - type: caller
     code: 404
     info:
-    - "precondition: account · id=7 есть — чтение до проверяемого вызова"
+    - "precondition: account · id=7 ` + protocolWordPresent + `"
     assertions:
     - result.statuscode MustEqual 200
   - type: caller
@@ -263,28 +263,28 @@ func TestProtocolPresence(t *testing.T) {
 	dir := runProtocolSuite(t, presenceSuite, false)
 
 	p := readProtocol(t, dir, "present")
-	assert.Contains(t, p, "## Наличие данных\n\n| сущность | ключ | запрос | есть/нет | trace id | ключ в проверяемом вызове |")
-	assert.Contains(t, p, "| account | `id=7` | `GET /v1/billing/accounts/7` | данные есть ✅ | `0af7651916cd43dd8448eb211c80319c` | `7` ✅ отправлен")
-	assert.Less(t, strings.Index(p, "## Наличие данных"), strings.Index(p, "## Запрос"), "the table goes before the main call")
-	assert.Equal(t, 1, strings.Count(p, "| account |"), "the expect «данные есть: …» of the call makes no row")
+	assert.Contains(t, p, protocolHeadPresence+"\n\n"+protocolPresenceHeader)
+	assert.Contains(t, p, "| account | `id=7` | `GET /v1/billing/accounts/7` | "+protocolDataPresent+" ✅ | `0af7651916cd43dd8448eb211c80319c` | `7` "+protocolKeySent)
+	assert.Less(t, strings.Index(p, protocolHeadPresence), strings.Index(p, protocolHeadRequest), "the table goes before the main call")
+	assert.Equal(t, 1, strings.Count(p, "| account |"), "the expect line naming present data makes no row")
 
 	a := readProtocol(t, dir, "absent")
-	assert.Contains(t, a, "| account | `id=9223372036854775807` | `GET /v1/billing/accounts/9223372036854775807` | данных нет ✅ |")
-	assert.Contains(t, a, "`9223372036854775807` ❌ не отправлен", "the tested call looked for another id")
+	assert.Contains(t, a, "| account | `id=9223372036854775807` | `GET /v1/billing/accounts/9223372036854775807` | "+protocolDataAbsent+" ✅ |")
+	assert.Contains(t, a, "`9223372036854775807` "+protocolKeyNotSent, "the tested call looked for another id")
 
 	f := readProtocol(t, dir, "failed")
-	assert.Contains(t, f, "данные есть ❌ не подтверждено")
-	assert.Contains(t, f, "❌ не пройден")
+	assert.Contains(t, f, protocolDataPresent+" "+protocolNotConfirmed)
+	assert.Contains(t, f, protocolFailed)
 	assert.Contains(t, f, "result.statuscode MustEqual 200", "the testcase fails at the precondition")
-	assert.Contains(t, f, "- шаг: 1 «caller»", "the fact is the failed precondition read")
+	assert.Contains(t, f, fmt.Sprintf(protocolStepLine, 1, "caller"), "the fact is the failed precondition read")
 
 	n := readProtocol(t, dir, "none")
-	assert.Contains(t, n, "## Наличие данных\n\nпредусловия нет\n")
-	assert.NotContains(t, n, "| сущность |")
+	assert.Contains(t, n, protocolHeadPresence+"\n\n"+protocolNoPrecondition+"\n")
+	assert.NotContains(t, n, protocolPresenceHeader)
 }
 
 func TestProtocolFileNameKeepsRowID(t *testing.T) {
-	assert.Equal(t, "GW-B0005-DELETE-v1-billing-accounts-{account_id}-без-ключа", protocolFileName("GW-B0005 DELETE /v1/billing/accounts/{account_id} без ключа"))
+	assert.Equal(t, "GW-B0005-DELETE-v1-billing-accounts-{account_id}-without-key", protocolFileName("GW-B0005 DELETE /v1/billing/accounts/{account_id} without key"))
 	assert.Equal(t, "S-001-CreateAccount", protocolFileName("S-001: CreateAccount"))
 	assert.Equal(t, "testcase", protocolFileName(" / "))
 }
@@ -298,7 +298,7 @@ testcases:
     code: 200
     trace_dir: %[1]s
     info:
-    - "precondition: account · id=7 есть — чтение до проверяемого вызова"
+    - "precondition: account · id=7 `+protocolWordPresent+`"
   - type: checker
     out: "1"
     assertions:
@@ -311,7 +311,7 @@ testcases:
   - type: caller
     code: 200
     info:
-    - "precondition: account · id=7 есть — чтение до проверяемого вызова"
+    - "precondition: account · id=7 `+protocolWordPresent+`"
   - type: checker
     out: "0"
     assertions:
@@ -321,10 +321,10 @@ testcases:
     url: /v1/billing/accounts/7
 `, false)
 	h := readProtocol(t, dir, "held")
-	assert.Contains(t, h, "| account | `id=7` | `caller` | данные есть ✅ |")
-	assert.Contains(t, h, "`7` ✅ отправлен")
+	assert.Contains(t, h, "| account | `id=7` | `caller` | "+protocolDataPresent+" ✅ |")
+	assert.Contains(t, h, "`7` "+protocolKeySent)
 	b := readProtocol(t, dir, "broken")
-	assert.Contains(t, b, "данные есть ❌ не подтверждено", "the check after the read fails the precondition")
+	assert.Contains(t, b, protocolDataPresent+" "+protocolNotConfirmed, "the check after the read fails the precondition")
 }
 
 func TestProtocolGatewayTraceFromHeader(t *testing.T) {
@@ -343,16 +343,16 @@ testcases:
     - systemout ShouldEqual 403
 `, false)
 	p := readProtocol(t, dir, "gateway")
-	for _, want := range []string{"## Запрос", "- метод: POST", "- url: http://nginx-gateway/v1/billing/accounts",
-		"  - Authorization: Bearer *** (12 знаков)", "  - X-Idempotency-Key: NloBboqV", "\"tenant_id\": \"7\"",
-		"## Ответ", "- statuscode: 403", "- trace_id: 0af7651916cd43dd8448eb211c80319c", "  - X-Build: dev-1",
+	for _, want := range []string{protocolHeadRequest, protocolMethodLine + "POST", "- url: http://nginx-gateway/v1/billing/accounts",
+		"  - Authorization: Bearer " + fmt.Sprintf(protocolMasked, 12), "  - X-Idempotency-Key: NloBboqV", "\"tenant_id\": \"7\"",
+		protocolHeadAnswer, "- statuscode: 403", "- trace_id: 0af7651916cd43dd8448eb211c80319c", "  - X-Build: dev-1",
 		"  - X-Request-Id: r-1", "  - X-Trace-Id: 0af7651916cd43dd8448eb211c80319c", "\"code\": \"role_required\"",
-		"## Трасса", "svc-billing ✅ GetAccount", "✅ пройден"} {
+		protocolHeadTrace, "svc-billing ✅ GetAccount", protocolPassed} {
 		assert.Contains(t, p, want)
 	}
 	assert.NotContains(t, p, "secret-token")
 	assert.NotContains(t, p, "Server: nginx", "only the trace, request and build headers of the answer")
-	assert.NotContains(t, p, "трассы нет")
+	assert.NotContains(t, p, protocolNoTrace)
 }
 
 func TestProtocolTraceGateFailsWithoutTree(t *testing.T) {
@@ -365,9 +365,9 @@ testcases:
     trace_dir: %s/missing
 `, false)
 	p := readProtocol(t, dir, "untraced")
-	assert.Contains(t, p, "❌ не пройден")
+	assert.Contains(t, p, protocolFailed)
 	assert.Contains(t, p, "trace 0af7651916cd43dd8448eb211c80319c returned by the call has no saved span tree")
-	assert.Contains(t, p, "- дерева нет:")
+	assert.Contains(t, p, protocolNoTree)
 }
 
 func TestProtocolReadBackAfterWrite(t *testing.T) {
@@ -385,8 +385,8 @@ testcases:
     url: /v1/billing/accounts/7
 `, false)
 	p := readProtocol(t, dir, "write")
-	after := p[strings.Index(p, "## Состояние после вызова"):]
-	assert.Contains(t, after, "### шаг 2 «caller»")
+	after := p[strings.Index(p, protocolHeadAfter):]
+	assert.Contains(t, after, fmt.Sprintf(protocolAfterStep, 2, "caller", ""))
 	assert.Contains(t, after, "- statuscode: 201")
 }
 

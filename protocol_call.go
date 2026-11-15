@@ -99,7 +99,7 @@ func traceGate(tc *TestCase) {
 func protocolRequestBlock(r *TestStepResult) string {
 	var b strings.Builder
 	if method, ok := r.ComputedVars["result.request.method"]; ok {
-		fmt.Fprintf(&b, "- метод: %v\n- url: %v\n", method, r.ComputedVars["result.request.url"])
+		fmt.Fprintf(&b, protocolMethodLine+"%v\n- url: %v\n", method, r.ComputedVars["result.request.url"])
 		b.WriteString(protocolHeaders(r, "result.request.header.", nil))
 		b.WriteString(protocolBodyBlock("тело", fmt.Sprint(r.ComputedVars["result.request.body"])))
 		return b.String()
@@ -164,7 +164,7 @@ func protocolAfter(tc *TestCase, call *TestStepResult, n int) string {
 		if !protocolIsCall(r) {
 			continue
 		}
-		fmt.Fprintf(&b, "### шаг %d «%s» %s\n\n", i+1, r.Name, protocolRequest(r))
+		fmt.Fprintf(&b, protocolAfterStep+"\n\n", i+1, r.Name, protocolRequest(r))
 		b.WriteString(protocolRequestBlock(r))
 		b.WriteString(protocolResponseBlock(r))
 		b.WriteString("\n")
@@ -226,7 +226,7 @@ func protocolMask(name, value string) string {
 	if i := strings.Index(value, " "); i >= 0 {
 		scheme, token = value[:i+1], strings.TrimSpace(value[i+1:])
 	}
-	return fmt.Sprintf("%s*** (%d знаков)", scheme, len(token))
+	return fmt.Sprintf("%s"+protocolMasked, scheme, len(token))
 }
 
 // protocolBodyBlock prints a body verbatim in a code block, a JSON body one key per line, cut at protocolBodyMax.
