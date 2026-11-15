@@ -75,6 +75,9 @@ type Executor struct {
 	// QueueDelete deletes the queue after the read: a step-own capture queue leaves nothing behind on the broker.
 	// messageLimit -1 declares and binds the queue and reads nothing, so a later step reads what came after the binding.
 	QueueDelete bool `json:"queue_delete" yaml:"queue_delete" mapstructure:"queue_delete"`
+	// ExchangePassive checks that the exchange exists instead of declaring it: the step fails on 404 NOT_FOUND. With no
+	// client_type the step does only that check.
+	ExchangePassive bool `json:"exchange_passive" yaml:"exchange_passive" mapstructure:"exchange_passive"`
 }
 
 // Result represents a step result.
@@ -124,6 +127,14 @@ func (Executor) Run(ctx context.Context, step venom.TestStep) (interface{}, erro
 	}
 
 	switch e.ClientType {
+	case "":
+		if !e.ExchangePassive {
+			return nil, fmt.Errorf("clientType %q must be publisher or subscriber or client", e.ClientType)
+		}
+		if err := e.checkExchange(ctx); err != nil {
+			result.Err = err.Error()
+			return nil, err
+		}
 	case "publisher":
 		workdir := venom.StringVarFromCtx(ctx, "venom.testsuite.workdir")
 		err := e.publishMessages(ctx, workdir, nil, nil, false)
@@ -197,15 +208,7 @@ func (e Executor) publishMessages(ctx context.Context, workdir string, connectio
 	// If an exchange if defined
 	routingKey := e.RoutingKey
 	if e.Exchange != "" {
-		if err := ch.ExchangeDeclare(
-			e.Exchange,     // name
-			e.ExchangeType, // type
-			e.Durable,      // durable
-			false,          // auto-deleted
-			false,          // internal
-			false,          // no-wait
-			nil,            // arguments
-		); err != nil {
+		if err := e.declareExchange(ch); err != nil {
 			return err
 		}
 		venom.Debug(ctx, "exchange declared %q %q", e.Exchange, e.ExchangeType)
@@ -334,16 +337,7 @@ func (e Executor) consumeMessages(ctx context.Context, dec *protoDecoder, r *Res
 
 	// If an exchange if defined
 	if e.Exchange != "" && !e.QueuePassive {
-		err = ch.ExchangeDeclare(
-			e.Exchange,     // name
-			e.ExchangeType, // type
-			e.Durable,      // durable
-			false,          // auto-deleted
-			false,          // internal
-			false,          // no-wait
-			nil,            // arguments
-		)
-		if err != nil {
+		if err = e.declareExchange(ch); err != nil {
 			return err
 		}
 		venom.Debug(ctx, "exchange declared '%s' '%s'", e.Exchange, e.ExchangeType)
