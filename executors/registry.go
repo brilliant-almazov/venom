@@ -26,6 +26,7 @@ import (
 	"github.com/ovh/venom/executors/tempo"
 	"github.com/ovh/venom/executors/wait"
 	"github.com/ovh/venom/executors/web"
+	"github.com/ovh/venom/executors/writefile"
 )
 
 type Constructor func() venom.Executor
@@ -57,5 +58,6 @@ var Registry map[string]Constructor = map[string]Constructor{
 	wait.Name:           wait.New,
 	mongo.Name:          mongo.New,
 	web.Name:            web.New,
+	writefile.Name:      writefile.New,
 	couchbase.Name:      couchbase.New,
 }
