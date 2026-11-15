@@ -389,3 +389,12 @@ testcases:
 	assert.Contains(t, after, "### шаг 2 «caller»")
 	assert.Contains(t, after, "- statuscode: 201")
 }
+
+func TestProtocolCallLinesOnePerLine(t *testing.T) {
+	assert.Equal(t, "GET http://nginx-gateway/openapi/openapi.swagger.json; \n"+
+		"        GET http://nginx-gateway/v1/billing/currencies token gw_token; \n"+
+		"        GET http://nginx-gateway/v1/me/idempotency-salt",
+		protocolCallLines("call", "GET http://nginx-gateway/openapi/openapi.swagger.json; GET http://nginx-gateway/v1/billing/currencies token gw_token; GET http://nginx-gateway/v1/me/idempotency-salt"))
+	assert.Equal(t, "GET /x", protocolCallLines("call", "GET /x"))
+	assert.Equal(t, "a; b", protocolCallLines("norm", "a; b"), "only the call line is split")
+}

@@ -142,9 +142,19 @@ func protocolKeys(b *strings.Builder, info map[string][]string, keys ...string) 
 			continue
 		}
 		for _, val := range vals {
-			fmt.Fprintf(b, "- %s: %s\n", k, val)
+			fmt.Fprintf(b, "- %s: %s\n", k, protocolCallLines(k, val))
 		}
 	}
+}
+
+// protocolCallLines prints a «call:» line of several calls one call per line, each under the first, the «; » kept at
+// the end of the line (owner 2026-11-15: «Должно быть так отформатировано»).
+func protocolCallLines(key, val string) string {
+	if key != "call" || !strings.Contains(val, "; ") {
+		return val
+	}
+	pad := strings.Repeat(" ", len([]rune("- "+key+": ")))
+	return strings.Join(strings.Split(val, "; "), "; \n"+pad)
 }
 
 // protocolPreconditionLine reads the precondition line of a read step, the one form of the scenario template
