@@ -257,9 +257,11 @@ loopRawTestSteps:
 
 			// the value of each var can contains a double-quote -> "
 			// if the value is not escaped, it will be used as is, and the json sent to unmarshall will be incorrect.
-			// This also avoids injections into the json structure of a step
+			// This also avoids injections into the json structure of a step.
+			// A newline, carriage return or tab is escaped the same way: raw in the JSON of the step, YAML folds it into a
+			// space and a multi-line var (a health output given as a baseline) reaches the step as one line.
 			for i := range vars {
-				if strings.Contains(vars[i], `"`) {
+				if strings.ContainsAny(vars[i], "\"\n\r\t") {
 					x := strconv.Quote(vars[i])
 					x = strings.TrimPrefix(x, `"`)
 					x = strings.TrimSuffix(x, `"`)
