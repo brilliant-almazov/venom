@@ -1,5 +1,8 @@
 // Package tempo saves a trace from a Grafana Tempo HTTP API to a file, and exposes that as the `tempo` executor.
 //
+// Next to <trace_dir>/<trace_id>.json the span tree is written as <trace_dir>/<trace_id>.md (Render): the file the
+// protocol prints under Trace and the trace gate looks for.
+//
 // A trace is saved when GET <tempo_url>/api/traces/<trace_id> answers 200 with at least one batch (or resourceSpans).
 // Save polls every 500 ms up to `wait`; when the trace is not ingested yet, a late fetch keeps polling in the background
 // (every 2 s up to LateWait) while the venom process lives, and the result says "late".
@@ -16,6 +19,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/mitchellh/mapstructure"
@@ -49,6 +53,7 @@ type Result struct {
 	TraceID    string `json:"trace_id" yaml:"trace_id"`
 	TraceSaved string `json:"trace_saved" yaml:"trace_saved"`
 	TraceFile  string `json:"trace_file" yaml:"trace_file"`
+	TreeFile   string `json:"tree_file" yaml:"tree_file"`
 	Spans      int    `json:"spans" yaml:"spans"`
 }
 
@@ -76,7 +81,11 @@ func (Executor) Run(ctx context.Context, step venom.TestStep) (interface{}, erro
 		wait = 20 * time.Second
 	}
 	saved, file, spans := Save(ctx, e.TempoURL, e.TraceDir, e.TraceID, wait)
-	return Result{TraceID: e.TraceID, TraceSaved: saved, TraceFile: file, Spans: spans}, nil
+	r := Result{TraceID: e.TraceID, TraceSaved: saved, TraceFile: file, Spans: spans}
+	if saved == "yes" {
+		r.TreeFile = strings.TrimSuffix(file, ".json") + ".md"
+	}
+	return r, nil
 }
 
 // NewTraceID returns 32 hex chars of a W3C trace id; a valid given id is kept.
@@ -193,7 +202,15 @@ func spanCount(body []byte) int {
 	return n
 }
 
+// write puts the trace to file and its span tree next to it as .md.
 func write(file string, body []byte) error {
+	if err := writeFile(strings.TrimSuffix(file, ".json")+".md", []byte(Render(body))); err != nil {
+		return err
+	}
+	return writeFile(file, body)
+}
+
+func writeFile(file string, body []byte) error {
 	tmp := file + ".part"
 	if err := os.WriteFile(tmp, body, 0o644); err != nil {
 		return err

@@ -76,10 +76,11 @@ func protocolText(ts *TestSuite, tc *TestCase) string {
 	b.WriteString(protocolPresenceTable(tc, rows, call))
 
 	b.WriteString("\n" + protocolHeadRequest + "\n\n")
-	protocolKeys(&b, info, "point", "call")
+	protocolKeys(&b, info, "point")
 	if call == nil {
-		b.WriteString("- call result: the testcase has no call\n")
+		b.WriteString("- call: the testcase has no call\n")
 	} else {
+		fmt.Fprintf(&b, "- call: %s\n", protocolRequest(call))
 		fmt.Fprintf(&b, protocolStepLine+"\n", n+1, call.Name)
 		b.WriteString(protocolRequestBlock(call))
 	}
@@ -144,19 +145,9 @@ func protocolKeys(b *strings.Builder, info map[string][]string, keys ...string) 
 			continue
 		}
 		for _, val := range vals {
-			fmt.Fprintf(b, "- %s: %s\n", k, protocolCallLines(k, val))
+			fmt.Fprintf(b, "- %s: %s\n", k, val)
 		}
 	}
-}
-
-// protocolCallLines prints a «call:» line of several calls one call per line, each under the first, the «; » kept at
-// the end of the line (owner 2026-11-15).
-func protocolCallLines(key, val string) string {
-	if key != "call" || !strings.Contains(val, "; ") {
-		return val
-	}
-	pad := strings.Repeat(" ", len([]rune("- "+key+": ")))
-	return strings.Join(strings.Split(val, "; "), "; \n"+pad)
 }
 
 // protocolPreconditionLine reads the precondition line of a read step, the one form of the scenario template
@@ -259,23 +250,49 @@ func protocolStep(r *TestStepResult) map[string]interface{} {
 	return m
 }
 
-// protocolRequest names the request of a step: its «call:» info line, else method and url (http), else url, service and
-// method (grpc), else the step type.
+// protocolRequest names the request of a step declaratively, from the step itself and never from the text of a script:
+// the executor, then the method and full url of an http call, else the url, service and method of a grpc call, else
+// the declared fields of the step (owner 2026-11-15: scenarios and protocols are declarative only).
 func protocolRequest(r *TestStepResult) string {
-	for _, l := range r.ComputedInfo {
-		if m := protocolInfoLine.FindStringSubmatch(l); m != nil && m[1] == "call" {
-			return "`" + m[2] + "`"
+	m := protocolStep(r)
+	str := func(k string) string { return protocolField(m[k]) }
+	if method, ok := r.ComputedVars["result.request.method"]; ok {
+		return fmt.Sprintf("`%s %v %v`", str("type"), method, r.ComputedVars["result.request.url"])
+	}
+	if str("service") != "" {
+		return fmt.Sprintf("`%s %s %s/%s`", str("type"), str("url"), str("service"), str("method"))
+	}
+	words := []string{str("type")}
+	for _, k := range []string{"method", "url", "path"} {
+		if v := str(k); v != "" {
+			words = append(words, v)
 		}
 	}
-	m := protocolStep(r)
-	str := func(k string) string { s, _ := m[k].(string); return s }
-	switch {
-	case str("url") != "" && str("method") != "" && str("service") == "":
-		return fmt.Sprintf("`%s %s`", str("method"), str("url"))
-	case str("service") != "" || str("method") != "":
-		return fmt.Sprintf("`grpc %s %s/%s`", str("url"), str("service"), str("method"))
+	for _, k := range protocolDeclaredFields {
+		if v := str(k); v != "" {
+			words = append(words, k+"="+v)
+		}
 	}
-	return "`" + str("type") + "`"
+	return "`" + strings.Join(words, " ") + "`"
+}
+
+// protocolDeclaredFields are the fields of a step that is not an http or grpc call, as the call line and the Request
+// section print them: the stand utility (cli, seed, stand_status), the openapi operation, a trace save, a check.
+var protocolDeclaredFields = []string{"action", "args", "env", "block", "role", "trace_id", "value"}
+
+// protocolField prints a field of the step: a list as its items joined by a space.
+func protocolField(v interface{}) string {
+	if list, ok := v.([]interface{}); ok {
+		words := make([]string, 0, len(list))
+		for _, w := range list {
+			words = append(words, fmt.Sprint(w))
+		}
+		return strings.Join(words, " ")
+	}
+	if v == nil {
+		return ""
+	}
+	return fmt.Sprint(v)
 }
 
 // protocolLastCall is the call of the testcase, a passed precondition read left out, among the steps with a «call:» info

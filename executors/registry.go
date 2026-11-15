@@ -3,6 +3,8 @@ package executors
 import (
 	"github.com/ovh/venom"
 	"github.com/ovh/venom/executors/amqp"
+	"github.com/ovh/venom/executors/check"
+	"github.com/ovh/venom/executors/cli"
 	"github.com/ovh/venom/executors/couchbase"
 	"github.com/ovh/venom/executors/dbfixtures"
 	"github.com/ovh/venom/executors/exec"
@@ -29,25 +31,29 @@ type Constructor func() venom.Executor
 
 // Registry is a map of executors to executor constructor functions.
 var Registry map[string]Constructor = map[string]Constructor{
-	amqp.Name:       amqp.New,
-	dbfixtures.Name: dbfixtures.New,
-	exec.Name:       exec.New,
-	grpc.Name:       grpc.New,
-	http.Name:       http.New,
-	imap.Name:       imap.New,
-	kafka.Name:      kafka.New,
-	mqtt.Name:       mqtt.New,
-	openapi.Name:    openapi.New,
-	ovhapi.Name:     ovhapi.New,
-	rabbitmq.Name:   rabbitmq.New,
-	readfile.Name:   readfile.New,
-	redis.Name:      redis.New,
-	s3.Name:         s3.New,
-	smtp.Name:       smtp.New,
-	sql.Name:        sql.New,
-	ssh.Name:        ssh.New,
-	tempo.Name:      tempo.New,
-	mongo.Name:      mongo.New,
-	web.Name:        web.New,
-	couchbase.Name:  couchbase.New,
+	amqp.Name:           amqp.New,
+	check.Name:          check.New,
+	cli.Name:            cli.New,
+	cli.SeedName:        cli.NewSeed,
+	cli.StandStatusName: cli.NewStandStatus,
+	dbfixtures.Name:     dbfixtures.New,
+	exec.Name:           exec.New,
+	grpc.Name:           grpc.New,
+	http.Name:           http.New,
+	imap.Name:           imap.New,
+	kafka.Name:          kafka.New,
+	mqtt.Name:           mqtt.New,
+	openapi.Name:        openapi.New,
+	ovhapi.Name:         ovhapi.New,
+	rabbitmq.Name:       rabbitmq.New,
+	readfile.Name:       readfile.New,
+	redis.Name:          redis.New,
+	s3.Name:             s3.New,
+	smtp.Name:           smtp.New,
+	sql.Name:            sql.New,
+	ssh.Name:            ssh.New,
+	tempo.Name:          tempo.New,
+	mongo.Name:          mongo.New,
+	web.Name:            web.New,
+	couchbase.Name:      couchbase.New,
 }

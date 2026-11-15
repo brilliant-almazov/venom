@@ -63,3 +63,38 @@ func TestNewTraceID(t *testing.T) {
 		t.Fatal("span id length")
 	}
 }
+
+const treeTrace = `{"batches":[
+{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"nginx-gateway"}}]},
+ "scopeSpans":[{"spans":[{"spanId":"r","name":"POST /v1/billing/accounts","startTimeUnixNano":"1000000","endTimeUnixNano":"13000000"}]}]},
+{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"svc-billing"}}]},
+ "scopeSpans":[{"spans":[
+  {"spanId":"b","parentSpanId":"a","name":"Insert","startTimeUnixNano":"3000000","endTimeUnixNano":"4000000","status":{"code":"STATUS_CODE_ERROR","message":"duplicate key"}},
+  {"spanId":"a","parentSpanId":"r","name":"CreateAccount","startTimeUnixNano":"2000000","endTimeUnixNano":"12000000","status":{"code":0}}]}]}]}`
+
+func TestRenderTree(t *testing.T) {
+	want := "- nginx-gateway · POST /v1/billing/accounts · 12.0 ms · ✅\n" +
+		"  - svc-billing · CreateAccount · 10.0 ms · ✅\n" +
+		"    - svc-billing · Insert · 1.0 ms · ❌ duplicate key\n"
+	if got := Render([]byte(treeTrace)); got != want {
+		t.Fatalf("tree\n%s\nwant\n%s", got, want)
+	}
+}
+
+func TestSaveWritesTree(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(treeTrace)) }))
+	defer srv.Close()
+	dir := t.TempDir()
+	out, err := Executor{}.Run(context.Background(), map[string]interface{}{"trace_id": "0123456789abcdef0123456789abcdef", "tempo_url": srv.URL, "trace_dir": dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := out.(Result)
+	if r.TreeFile != filepath.Join(dir, "0123456789abcdef0123456789abcdef.md") {
+		t.Fatalf("tree file %q", r.TreeFile)
+	}
+	body, err := os.ReadFile(r.TreeFile)
+	if err != nil || string(body) != Render([]byte(treeTrace)) {
+		t.Fatalf("tree %q err %v", body, err)
+	}
+}

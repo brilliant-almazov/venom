@@ -95,7 +95,7 @@ func traceGate(tc *TestCase) {
 }
 
 // protocolRequestBlock is what the call sent: method, full url, headers (Authorization masked) and the body verbatim,
-// JSON one key per line; a step that is not http shows its call fields from the interpolated step.
+// JSON one key per line; a step that is not http shows its declared fields from the interpolated step, never a script.
 func protocolRequestBlock(r *TestStepResult) string {
 	var b strings.Builder
 	if method, ok := r.ComputedVars["result.request.method"]; ok {
@@ -105,10 +105,10 @@ func protocolRequestBlock(r *TestStepResult) string {
 		return b.String()
 	}
 	step := protocolStep(r)
-	fmt.Fprintf(&b, "- step type: %v\n", step["type"])
-	for _, k := range []string{"method", "url", "gateway", "path", "service", "addr", "role"} {
-		if v, ok := step[k]; ok && fmt.Sprint(v) != "" {
-			fmt.Fprintf(&b, "- %s: %v\n", k, v)
+	fmt.Fprintf(&b, "- executor: %v\n", step["type"])
+	for _, k := range append([]string{"method", "url", "gateway", "path", "service", "addr"}, protocolDeclaredFields...) {
+		if v := protocolField(step[k]); v != "" {
+			fmt.Fprintf(&b, "- %s: %s\n", k, v)
 		}
 	}
 	for _, k := range []string{"headers", "metadata"} {
@@ -119,7 +119,7 @@ func protocolRequestBlock(r *TestStepResult) string {
 			}
 		}
 	}
-	for _, k := range []string{"body", "data_json", "data", "query", "script"} {
+	for _, k := range []string{"body", "data_json", "data", "query"} {
 		v, ok := step[k]
 		if !ok || fmt.Sprint(v) == "" {
 			continue

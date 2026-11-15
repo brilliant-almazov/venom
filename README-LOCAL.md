@@ -118,10 +118,11 @@ skipped by `--stop-on-failure`. Sections:
 - `## State before`: every precondition read of the testcase with its request and answer;
 - `## Data presence`: one row per info line «precondition: <entity> · <key> present|absent — …» (the one form of
   scenarios/TEMPLATE.*.yml) of a precondition step, the read through the API that proves the data is there or is not:
-  entity · key · request (the `call:` line of that step, else its method and url, or url, service and method) ·
+  entity · key · request (the executor and its method and url, or url, service and method, or its declared fields) ·
   present/absent with ✅ when that read and the checks after it, up to the next call, held and «❌ not confirmed» when one
   failed · trace id · whether the tested call sent the key's value, with its request. No such line: «no precondition»;
-- `## Request`: the `point` and `call` info lines (a `call:` of several calls one call per line), the step, and what the
+- `## Request`: the `point` info line, the `call:` line rendered from the step itself (executor, method and url, or rpc,
+  or the declared fields; never a script), the step, and what the
   call sent: method, full url, headers (Authorization masked, X-Idempotency-Key shown) and the body, JSON one key per
   line; a step that is not http shows the call fields of its interpolated step. The call is the step with the `call:`
   info line when the testcase has one, else a step with a trace id and a code: the last failed call, else the last call;
@@ -150,6 +151,45 @@ Stock Venom has none of this. It has no testcase-level `info` key: `TestCaseInpu
 The protocol is therefore written by the runner after the status of the testcase is known (`process_testsuite.go`,
 `runOneTestCase`). Point test: `protocol_test.go`, covering green, a failed Must, --stop-on-failure, and a failed Should
 with skipped vars, the template shape (a call with vars only, then a failing check step), the presence table (data present, data absent, failed precondition, no precondition) and the file name.
+
+## 11. A value checked with no shell: `type: check`
+
+```yaml
+- type: check
+  value: '{{.call_code}}'
+  assertions:
+  - result.value ShouldEqual 200
+  - result.valuejson.items.items0.id MustEqual 7
+```
+
+`value` (string, interpolated) is returned as `result.value`, and parsed as `result.valuejson` when it is JSON. The
+step makes no call and returns no trace_id; a failed Must assertion stops the testcase. Point test:
+`executors/check/check_test.go`.
+
+## 12. The stand utility with no script: `type: cli`, `seed`, `stand_status`
+
+| field | type | default | |
+| -- | -- | -- | -- |
+| `bin` | string | `bin/cli` | the utility, relative to the testsuite workdir; started directly, never through a shell |
+| `action` | string | — | `cli` only: its words, `service on`, `health`, `var list` |
+| `args` | list of strings | `[]` | after the action |
+| `env` | string | — | required, passed as `--env <env>` |
+| `block` | string | — | `seed` only, required, passed as `--block <block>` |
+| `output_file` | string | — | systemout, then systemerr, under the venom output dir |
+
+argv is `<action words> <args> [--block <block>] --env <env>`; `seed` is the action `seed`, `stand_status` the action
+`status`. Result: `result.systemout`, `result.systemoutjson` (when systemout is JSON, the read-back of a seed),
+`result.systemerr`, `result.code` (exit code, default assertion `result.code ShouldEqual 0`), `result.output_file`. No
+trace_id. Point test: `executors/cli/cli_test.go`.
+
+## 13. The span tree of a saved trace: `tempo` writes `<trace_id>.md`
+
+The `tempo` executor (`trace_id`, `tempo_url`, `trace_dir`, `wait` seconds, default 20) and the traced http and grpc
+calls save `<trace_dir>/<trace_id>.json` and, next to it, the span tree `<trace_dir>/<trace_id>.md`: one span per line
+under its parent, `- <service> · <span> · <ms> ms · ✅`, `❌ <status message>` on an error status. The protocol prints
+this file under Trace and the trace gate fails a call whose tree is missing. Result: `result.trace_id`,
+`result.trace_saved` (`yes`, `late`, `no`), `result.trace_file`, `result.tree_file`, `result.spans`. Point test:
+`executors/tempo/tempo_test.go`.
 
 ## Build
 

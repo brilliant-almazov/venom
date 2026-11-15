@@ -107,6 +107,8 @@ testcases:
 `+testcaseInfo+`  steps:
   - type: caller
     code: 200
+    method: GET
+    url: /v1/billing/accounts/1
     trace_dir: %s
     info:
     - "call: GET /v1/billing/accounts/1"
@@ -115,7 +117,7 @@ testcases:
 `, false)
 	p := readProtocol(t, dir, "green")
 	for _, want := range []string{protocolHeadRight, "- expect: the account is read", "- right: statuscode 200", "- norm: cgw-billing: docs/api.md:12",
-		protocolHeadWrong, "- wrong: any other statuscode", protocolHeadRequest, protocolHeadAnswer, protocolHeadAfter, "- call: GET /v1/billing/accounts/1", "- statuscode: 200",
+		protocolHeadWrong, "- wrong: any other statuscode", protocolHeadRequest, protocolHeadAnswer, protocolHeadAfter, "- call: `caller GET /v1/billing/accounts/1`", "- statuscode: 200",
 		protocolHeadTrace, "svc-billing ✅ GetAccount", protocolHeadVerdict, protocolPassed} {
 		assert.Contains(t, p, want)
 	}
@@ -218,6 +220,8 @@ testcases:
 ` + testcaseInfo + `  steps:
   - type: caller
     code: 200
+    method: GET
+    url: /v1/billing/accounts/7
     trace_dir: %[1]s
     info:
     - "call: GET /v1/billing/accounts/7"
@@ -234,6 +238,8 @@ testcases:
   steps:
   - type: caller
     code: 404
+    method: GET
+    url: /v1/billing/accounts/9223372036854775807
     info:
     - "call: GET /v1/billing/accounts/9223372036854775807"
     - "precondition: account · id=9223372036854775807 ` + protocolWordAbsent + `"
@@ -264,7 +270,7 @@ func TestProtocolPresence(t *testing.T) {
 
 	p := readProtocol(t, dir, "present")
 	assert.Contains(t, p, protocolHeadPresence+"\n\n"+protocolPresenceHeader)
-	assert.Contains(t, p, "| account | `id=7` | `GET /v1/billing/accounts/7` | "+protocolDataPresent+" ✅ | `0af7651916cd43dd8448eb211c80319c` | `7` "+protocolKeySent)
+	assert.Contains(t, p, "| account | `id=7` | `caller GET /v1/billing/accounts/7` | "+protocolDataPresent+" ✅ | `0af7651916cd43dd8448eb211c80319c` | `7` "+protocolKeySent)
 	assert.Less(t, strings.Index(p, protocolHeadPresence), strings.Index(p, protocolHeadRequest), "the table goes before the main call")
 	before := p[strings.Index(p, protocolHeadBefore):strings.Index(p, protocolHeadPresence)]
 	assert.Contains(t, before, fmt.Sprintf(protocolAfterStep, 1, "caller", ""), "the precondition read with its request and answer")
@@ -272,7 +278,7 @@ func TestProtocolPresence(t *testing.T) {
 	assert.Equal(t, 1, strings.Count(p, "| account |"), "the expect line naming present data makes no row")
 
 	a := readProtocol(t, dir, "absent")
-	assert.Contains(t, a, "| account | `id=9223372036854775807` | `GET /v1/billing/accounts/9223372036854775807` | "+protocolDataAbsent+" ✅ |")
+	assert.Contains(t, a, "| account | `id=9223372036854775807` | `caller GET /v1/billing/accounts/9223372036854775807` | "+protocolDataAbsent+" ✅ |")
 	assert.Contains(t, a, "`9223372036854775807` "+protocolKeyNotSent, "the tested call looked for another id")
 
 	f := readProtocol(t, dir, "failed")
@@ -393,11 +399,33 @@ testcases:
 	assert.Contains(t, after, "- statuscode: 201")
 }
 
-func TestProtocolCallLinesOnePerLine(t *testing.T) {
-	assert.Equal(t, "GET http://nginx-gateway/openapi/openapi.swagger.json; \n"+
-		"        GET http://nginx-gateway/v1/billing/currencies token gw_token; \n"+
-		"        GET http://nginx-gateway/v1/me/idempotency-salt",
-		protocolCallLines("call", "GET http://nginx-gateway/openapi/openapi.swagger.json; GET http://nginx-gateway/v1/billing/currencies token gw_token; GET http://nginx-gateway/v1/me/idempotency-salt"))
-	assert.Equal(t, "GET /x", protocolCallLines("call", "GET /x"))
-	assert.Equal(t, "a; b", protocolCallLines("norm", "a; b"), "only the call line is split")
+func TestProtocolCallIsDeclarative(t *testing.T) {
+	dir := runProtocolSuite(t, `name: suite
+testcases:
+- name: shell
+`+testcaseInfo+`  steps:
+  - type: caller
+    code: 200
+    script: echo shell-text-secret
+    trace_dir: %[1]s
+    info:
+    - "call: curl -s http://nginx-gateway/v1/billing/accounts"
+- name: stand
+`+testcaseInfo+`  steps:
+  - type: caller
+    code: 200
+    action: service on
+    args: [svc-billing-server, --apply]
+    env: stand-1
+    info:
+    - "call: bin/cli service on svc-billing-server --apply --env stand-1 | grep ok"
+`, false)
+	p := readProtocol(t, dir, "shell")
+	assert.NotContains(t, p, "shell-text-secret", "a script body is never printed")
+	assert.NotContains(t, p, "curl", "the call line is rendered from the step, not from the declared text")
+	assert.Contains(t, p, "- call: `caller`")
+	s := readProtocol(t, dir, "stand")
+	assert.Contains(t, s, "- call: `caller action=service on args=svc-billing-server --apply env=stand-1`")
+	assert.Contains(t, s, "- action: service on\n- args: svc-billing-server --apply\n- env: stand-1\n")
+	assert.NotContains(t, s, "grep")
 }
