@@ -64,6 +64,7 @@ func init() {
 		"coalesce":     coalesce,
 		"toJSON":       toJSON,
 		"jsonSeq":      jsonSeq,
+		"hashids":      hashid,
 		"toPrettyJSON": toPrettyJSON,
 		"b64enc":       base64encode,
 		"b64dec":       base64decode,

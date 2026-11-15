@@ -41,6 +41,7 @@ require (
 	github.com/rubenv/sql-migrate v1.5.2
 	github.com/sijms/go-ora v1.3.2
 	github.com/sirupsen/logrus v1.9.3
+	github.com/speps/go-hashids/v2 v2.0.1
 	github.com/spf13/cast v1.5.1
 	github.com/spf13/cobra v1.7.0
 	github.com/spf13/pflag v1.0.5

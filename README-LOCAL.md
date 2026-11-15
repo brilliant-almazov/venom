@@ -99,6 +99,14 @@ plain fields (`statuscode`, `body`, `bodyjson`, `headers`, `trace_id`) and adds,
 joined by a comma), `bodies` (each body on one line, joined by a newline), `distinct_bodies`, `trace_ids`, `calls`.
 Point test: `executors/http/parallel_test.go`.
 
+## 9. Hashids of a number: template function `hashids`
+
+`{{hashids <salt> <min_length> <n>}}` encodes the number n by the hashids algorithm (default alphabet) on the salt
+and minimum length, as an API that hashes its ids and idempotency keys on a salt it gives out. Stock Venom has no such
+function, so a suite reads the salt by an `http` step, keeps it by `vars: from: result.bodyjson.<path>` and writes
+`X-Idempotency-Key: '{{hashids .salt 8 (randNumeric 15)}}'` instead of a script. An empty salt gives an empty string.
+Point test: `interpolate/hashids_test.go`.
+
 ## Build
 
 ```bash

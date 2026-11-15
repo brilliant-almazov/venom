@@ -544,6 +544,7 @@ Available helpers and some examples:
 - `b64enc`
 - `b64dec` {{.result.bodyjson | b64enc}}
 - `escape`: replace ‘_‘, ‘/’, ‘.’ by ‘-’
+- `hashids`: {{hashids .salt 8 .n}} encodes n by hashids on the salt with a minimum length of 8
 
 More examples are available [here](https://github.com/ovh/venom/tree/master/variable_helpers.md)
 
