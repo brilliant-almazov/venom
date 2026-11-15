@@ -54,6 +54,7 @@ var Registry map[string]Constructor = map[string]Constructor{
 	sql.Name:            sql.New,
 	ssh.Name:            ssh.New,
 	tempo.Name:          tempo.New,
+	wait.Name:           wait.New,
 	mongo.Name:          mongo.New,
 	web.Name:            web.New,
 	couchbase.Name:      couchbase.New,
