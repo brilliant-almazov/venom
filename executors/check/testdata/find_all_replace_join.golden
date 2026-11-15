@@ -1,0 +1,5 @@
+{
+  "count": 2,
+  "joined": "{\"id\":1,\"literal\":\"shop\"},{\"id\":3,\"literal\":\"shop\"}",
+  "matches": "[{\"id\":1,\"literal\":\"shop\"},{\"id\":3,\"literal\":\"shop\"}]"
+}

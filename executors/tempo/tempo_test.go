@@ -115,16 +115,16 @@ func TestSpanLines(t *testing.T) {
 
 func TestMismatch(t *testing.T) {
 	lines := SpanLines([]byte(attrTrace))
-	m, err := Mismatch(lines, []string{"Publish", "rows=3"}, []string{"Delete"}, []string{`Store · ❌`})
+	m, err := Mismatch(lines, Checks{Contains: []string{"Publish", "rows=3"}, NotContains: []string{"Delete"}, Matches: []string{`Store · ❌`}})
 	if err != nil || m != "" {
 		t.Fatalf("all hold, got %q %v", m, err)
 	}
-	m, err = Mismatch(lines, []string{"rows=4"}, []string{"timeout"}, []string{`^svc-billing`})
+	m, err = Mismatch(lines, Checks{Contains: []string{"rows=4"}, NotContains: []string{"timeout"}, Matches: []string{`^svc-billing`}})
 	want := "no span contains \"rows=4\"\nspan \"svc-crawler · Store · ❌ timeout\" contains \"timeout\"\nno span matches \"^svc-billing\""
 	if err != nil || m != want {
 		t.Fatalf("mismatch %q %v", m, err)
 	}
-	if _, err := Mismatch(lines, nil, nil, []string{"("}); err == nil {
+	if _, err := Mismatch(lines, Checks{Matches: []string{"("}}); err == nil {
 		t.Fatal("a bad regexp is an error")
 	}
 }

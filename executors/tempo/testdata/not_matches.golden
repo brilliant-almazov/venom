@@ -1,0 +1,1 @@
+span "svc-crawler · pgx.Query · ✅ · otel.scope.name=shared.db" matches "otel\\.scope\\.name=\\(?\\*?(shared|helpers|utils|common)[.)]"

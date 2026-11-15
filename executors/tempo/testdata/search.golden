@@ -1,0 +1,15 @@
+{
+  "query": "end=1700003600\u0026limit=20\u0026start=1700000000\u0026tags=service.name%3Dsvc-crawler+scenario_id%3Ds1",
+  "result": {
+    "trace_id": "0123456789abcdef0123456789abcdee",
+    "trace_saved": "yes",
+    "trace_file": "",
+    "tree_file": "",
+    "spans": 4,
+    "mismatch": "",
+    "values": "[\"pending\",\"sent\"]",
+    "trace_ids": "[\"0123456789abcdef0123456789abcdee\",\"ffffffffffffffffffffffffffffffff\"]",
+    "span_names": "[\"OrderManager.Create\",\"INSERT INTO outbox.outbox_slice\",\"pgx.Query\"]",
+    "count": 2
+  }
+}

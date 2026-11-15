@@ -1,0 +1,4 @@
+svc-crawler · OrderManager.Create · ✅ · otel.scope.name=internal/order/manager
+svc-crawler · INSERT INTO outbox.outbox_slice · ✅ · db.query.text.arg.2=ct0 · db.query.text.arg.4=pending · otel.scope.name=internal/order/manager
+svc-crawler · INSERT INTO outbox.outbox_slice · ✅ · db.query.text.arg.2=ct1 · db.query.text.arg.4=sent · otel.scope.name=internal/order/manager
+svc-crawler · pgx.Query · ✅ · otel.scope.name=shared.db

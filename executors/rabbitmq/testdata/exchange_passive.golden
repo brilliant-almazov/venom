@@ -1,0 +1,6 @@
+passive crawler.tasks topic durable=true
+passive crawler.missing topic durable=true
+declare crawler.own fanout durable=false
+crawler.tasks: <nil>
+crawler.missing: exchange "crawler.missing" does not exist: Exception (404) Reason: "NOT_FOUND - no exchange 'crawler.missing' in vhost '/'"
+crawler.own: <nil>

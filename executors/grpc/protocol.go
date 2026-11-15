@@ -35,6 +35,10 @@ func writeProtocol(e Executor, request []byte, r *Result, callErr error) {
 	if callErr != nil && msg == "" {
 		msg = callErr.Error()
 	}
+	sent := rawOrText(request)
+	if e.DataRepeat != nil {
+		sent = map[string]interface{}{"request_size": r.RequestSize, "request_sha256": r.RequestSHA256}
+	}
 	line := map[string]interface{}{
 		"ts":          time.Now().UTC().Format(time.RFC3339Nano),
 		"case":        e.Case,
@@ -42,7 +46,7 @@ func writeProtocol(e Executor, request []byte, r *Result, callErr error) {
 		"trace_file":  r.TraceFile,
 		"trace_saved": r.TraceSaved,
 		"call": map[string]interface{}{
-			"kind": "grpc", "method": e.Service + "/" + e.Method, "addr": e.URL, "request": rawOrText(request),
+			"kind": "grpc", "method": e.Service + "/" + e.Method, "addr": e.URL, "request": sent,
 			"code": r.Status, "message": msg, "response": rawOrText([]byte(r.Systemout)),
 		},
 	}

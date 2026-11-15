@@ -1,0 +1,14 @@
+{
+  "query": "q=%7Bresource.service.name%3D%22svc-crawler%22%7D",
+  "result": {
+    "trace_id": "",
+    "trace_saved": "no",
+    "trace_file": "",
+    "tree_file": "",
+    "spans": 0,
+    "mismatch": "no found trace holds the checks\nno span contains \"Missing\"",
+    "trace_ids": "[\"0123456789abcdef0123456789abcdee\"]",
+    "span_names": "[]",
+    "count": 1
+  }
+}

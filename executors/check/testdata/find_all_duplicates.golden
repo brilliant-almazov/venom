@@ -1,0 +1,5 @@
+{
+  "count": 5,
+  "duplicates": "[\"svc-a KAFKA_URL\",\"svc-b KAFKA_URL\"]",
+  "matches": "[\"svc-a KAFKA_URL\",\"svc-a LOG_LEVEL\",\"svc-b KAFKA_URL\",\"svc-a KAFKA_URL\",\"svc-b KAFKA_URL\"]"
+}

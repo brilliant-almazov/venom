@@ -3,8 +3,12 @@
 // Next to <trace_dir>/<trace_id>.json the span tree is written as <trace_dir>/<trace_id>.md (Render): the file the
 // protocol prints under Trace and the trace gate looks for.
 //
-// `contains`, `not_contains` and `matches` check the saved trace with no shell, over one line per span
+// `contains`, `not_contains`, `matches` and `not_matches` check the saved trace with no shell, over one line per span
 // "<service> · <span> · <status> · <key>=<value> …" (SpanLines); result.mismatch names each item that does not hold.
+// `values_of` gives the attribute values of the matching spans (ValuesOf).
+//
+// With `search` and no trace_id the step finds traces by the Tempo search API (search.go); with `traceql` it returns
+// the matched spans of a TraceQL query.
 //
 // A trace is saved when GET <tempo_url>/api/traces/<trace_id> answers 200 with at least one batch (or resourceSpans).
 // Save polls every 500 ms up to `wait`; when the trace is not ingested yet, a late fetch keeps polling in the background
@@ -44,15 +48,19 @@ func New() venom.Executor {
 }
 
 // Executor saves one trace: trace_id, tempo_url, trace_dir, wait (seconds, default 20), and checks it by contains,
-// not_contains and matches.
+// not_contains, matches and not_matches; or finds traces by search, or spans by traceql.
 type Executor struct {
-	TraceID     string   `json:"trace_id" yaml:"trace_id" mapstructure:"trace_id"`
-	TempoURL    string   `json:"tempo_url" yaml:"tempo_url" mapstructure:"tempo_url"`
-	TraceDir    string   `json:"trace_dir" yaml:"trace_dir" mapstructure:"trace_dir"`
-	Wait        int      `json:"wait" yaml:"wait" mapstructure:"wait"`
-	Contains    []string `json:"contains" yaml:"contains" mapstructure:"contains"`
-	NotContains []string `json:"not_contains" yaml:"not_contains" mapstructure:"not_contains"`
-	Matches     []string `json:"matches" yaml:"matches" mapstructure:"matches"`
+	TraceID  string `json:"trace_id" yaml:"trace_id" mapstructure:"trace_id"`
+	TempoURL string `json:"tempo_url" yaml:"tempo_url" mapstructure:"tempo_url"`
+	TraceDir string `json:"trace_dir" yaml:"trace_dir" mapstructure:"trace_dir"`
+	Wait     int    `json:"wait" yaml:"wait" mapstructure:"wait"`
+	Checks   `mapstructure:",squash"`
+	ValuesOf *ValuesOf `json:"values_of" yaml:"values_of" mapstructure:"values_of"`
+	Search   *Search   `json:"search" yaml:"search" mapstructure:"search"`
+	// ContainsAny keeps the found traces with a span line that contains one of its items.
+	ContainsAny []string `json:"contains_any" yaml:"contains_any" mapstructure:"contains_any"`
+	// TraceQL is a TraceQL query sent as it is, over the window of search.
+	TraceQL string `json:"traceql" yaml:"traceql" mapstructure:"traceql"`
 }
 
 // Result of the executor.
@@ -63,6 +71,13 @@ type Result struct {
 	TreeFile   string `json:"tree_file" yaml:"tree_file"`
 	Spans      int    `json:"spans" yaml:"spans"`
 	Mismatch   string `json:"mismatch" yaml:"mismatch"`
+	// Values (a JSON array) is set by values_of.
+	Values string `json:"values,omitempty" yaml:"values,omitempty"`
+	// TraceIDs and SpanNames (JSON arrays) are set by search; SpanList (a JSON array) and Count by traceql.
+	TraceIDs  string `json:"trace_ids,omitempty" yaml:"trace_ids,omitempty"`
+	SpanNames string `json:"span_names,omitempty" yaml:"span_names,omitempty"`
+	SpanList  string `json:"span_list,omitempty" yaml:"span_list,omitempty"`
+	Count     int    `json:"count" yaml:"count"`
 }
 
 // ZeroValueResult returns an empty result.
@@ -81,6 +96,12 @@ func (Executor) Run(ctx context.Context, step venom.TestStep) (interface{}, erro
 	if err := mapstructure.WeakDecode(step, &e); err != nil {
 		return nil, err
 	}
+	if e.TraceID == "" && e.TraceQL != "" {
+		return e.traceQL(ctx)
+	}
+	if e.TraceID == "" && e.Search != nil {
+		return e.search(ctx)
+	}
 	if !hex32.MatchString(e.TraceID) {
 		return nil, fmt.Errorf("tempo: trace_id %q is not 32 lower-case hex", e.TraceID)
 	}
@@ -93,7 +114,7 @@ func (Executor) Run(ctx context.Context, step venom.TestStep) (interface{}, erro
 	if saved == "yes" {
 		r.TreeFile = strings.TrimSuffix(file, ".json") + ".md"
 	}
-	if len(e.Contains)+len(e.NotContains)+len(e.Matches) == 0 {
+	if e.Checks.empty() && e.ValuesOf == nil {
 		return r, nil
 	}
 	if saved != "yes" {
@@ -104,12 +125,27 @@ func (Executor) Run(ctx context.Context, step venom.TestStep) (interface{}, erro
 	if err != nil {
 		return nil, err
 	}
-	mismatch, err := Mismatch(SpanLines(body), e.Contains, e.NotContains, e.Matches)
-	if err != nil {
+	if err := e.check(body, &r); err != nil {
 		return nil, err
 	}
-	r.Mismatch = mismatch
 	return r, nil
+}
+
+// check sets the mismatch of the checks and the values of values_of over one trace.
+func (e Executor) check(body []byte, r *Result) error {
+	mismatch, err := Mismatch(SpanLines(body), e.Checks)
+	if err != nil {
+		return err
+	}
+	r.Mismatch = mismatch
+	if e.ValuesOf != nil {
+		values, err := e.ValuesOf.Of(body)
+		if err != nil {
+			return err
+		}
+		r.Values = jsonList(values)
+	}
+	return nil
 }
 
 // NewTraceID returns 32 hex chars of a W3C trace id; a valid given id is kept.
@@ -232,6 +268,14 @@ func write(file string, body []byte) error {
 		return err
 	}
 	return writeFile(file, body)
+}
+
+// mkdirWrite is write into a folder made when missing.
+func mkdirWrite(file string, body []byte) error {
+	if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
+		return err
+	}
+	return write(file, body)
 }
 
 func writeFile(file string, body []byte) error {
