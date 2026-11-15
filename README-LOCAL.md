@@ -247,6 +247,148 @@ cli: an action `health` returns `result.red`, its ✗ rows of systemout and syst
 trailing duration removed, sorted, and `result.red_new`, the red rows not red in `baseline: '<systemout of an earlier
 health step>'`; one row per line, empty when none. Point test: `executors/cli/cli_test.go`.
 
+## 17. Every match of a regexp: check `find_all`, `replace`, `duplicates`, `join`
+
+```yaml
+- type: check
+  value: '{{.rules_body}}'
+  find_all: '\{[^{}]*"origin":"own"[^{}]*\}'
+  replace: [',"group":"[^"]*"', '']
+  join: ','
+  assertions:
+  - result.count ShouldEqual 2
+  - result.matches ShouldJSONContainWithKey id
+```
+
+`find_all` (Go regexp) takes every match over `value`, or its first capture group when the regexp has one. `replace:
+[<regexp>, <replacement>]` is applied to each match (`$1` expands a group). Result: `result.count`; `result.matches`, a
+JSON array text that a `range:` takes as it is (a match that is a JSON object or array is put as JSON, any other as a
+string); `result.matchesjson`, the parsed array; with `duplicates: true`, `result.duplicates`, a JSON array of the
+matches that occur more than once, each once, in the order of their first occurrence (`[]` when none); with `join:
+<separator>`, `result.joined`, the matches as written joined by the separator. A bad regexp or a `replace` that is not
+two items fails the step. Point test: `executors/check/check_test.go`, golden files in `executors/check/testdata`.
+
+## 18. Two JSON values compared: check `equal_json`, `sort_lists`
+
+```yaml
+- type: check
+  value: '{{.xmlriver_describe}}'
+  equal_json: '{{.dataforseo_describe}}'
+  sort_lists: true
+  assertions:
+  - result.json_equal ShouldBeTrue
+```
+
+`value` and `equal_json` are parsed as JSON and compared with keys in any order; with `sort_lists: true` every list,
+at any depth, is compared as its items in any order. Result: `result.json_equal`; when they differ,
+`result.json_diff` prints both values in canonical form. A value that is not JSON fails the step. Point test:
+`TestCheckEqualJSONSortLists`.
+
+## 19. Span lines with the scope, `not_matches` and `values_of` of a tempo step
+
+Each span line of section 13 now carries the instrumentation scope name of its span among the attributes as
+`otel.scope.name=<scope>` (from `scope.name`, or `instrumentationLibrary.name` of an older trace), sorted with them.
+`not_matches` (list of Go regexps) holds when no span line matches any of them; `result.mismatch` names each span
+line and regexp that match.
+
+`values_of: {span: <regexp>, attr: <regexp>}` gives `result.values`, a JSON array of the values of the attributes
+whose key matches `attr`, of the spans whose line matches `span`, each once, in span start order:
+
+```yaml
+- type: tempo
+  trace_id: '{{.unit_trace}}'
+  tempo_url: '{{.tempo_url}}'
+  trace_dir: '{{.trace_dir}}'
+  values_of: {span: 'INSERT INTO outbox\.outbox_slice', attr: '^db\.query\.text\.arg\.4$'}
+  assertions:
+  - result.values ShouldNotContainSubstring sent
+```
+
+Point tests: `executors/tempo/search_test.go` (`TestSpanLinesCarryScope`, `TestNotMatches`, `TestValuesOf`).
+
+## 20. Traces found by search, spans by TraceQL: tempo `search`, `contains_any`, `traceql`
+
+A `tempo` step with `search` and no `trace_id` calls `GET <tempo_url>/api/search`:
+
+```yaml
+- type: tempo
+  tempo_url: '{{.tempo_url}}'
+  trace_dir: '{{.trace_dir}}'
+  search:
+    tags: 'service.name=svc-a scenario_id={{.sid}}'   # or query: '{resource.service.name="svc-a"}' (TraceQL)
+    start: '{{.window_start}}'                        # unix seconds; start and end go together
+    end: '{{.window_end}}'
+    limit: 50
+  contains_any: ['{{.unit_id}}']
+  contains: ['content.scrape.request process']
+```
+
+`search.query` (TraceQL) or `search.tags` (logfmt) is required. Every found trace is fetched; the traces with a span
+line that contains an item of `contains_any` (all when it is not given) are kept. The match is the first kept trace
+that holds `contains`, `not_contains`, `matches` and `not_matches`; with `trace_dir` it is saved with its tree as a
+`trace_id` step saves it. Result: `result.trace_ids` (JSON array of the kept traces, 32 hex each), `result.count`,
+`result.trace_id`, `result.span_names` (JSON array of the span names of the match, each once, in start order),
+`result.values` of `values_of` over the match, `result.trace_saved`, `result.trace_file`, `result.tree_file`, and
+`result.mismatch` (`no found trace holds the checks` with the first trace's mismatch when checks are given and none
+holds). `trace_saved` is `no` without `trace_dir`, so such a step writes its own assertions.
+
+A `tempo` step with `traceql: <query>` and no `trace_id` sends the query as it is (`q=`), over the window `search.start`,
+`search.end`, `search.limit` and `search.spss` (spans per span set). Result: `result.span_list`, a JSON array of every
+matched span, each once per trace, `{trace_id, span_id, name, start_unix_nano, end_unix_nano, duration_nanos,
+attributes}`; `result.count`, the number of spans; `result.trace_ids`. A structural query, `{name="A"} >> {name="B"}`
+(B a descendant of A) or `<<`, `>`, `<`, `~`, selects the spans; order and count are checked by ordinary assertions
+and `check` steps over `result.span_list`. TraceQL cannot compare an attribute of one span set with an attribute of
+another, so a join on an attribute value is not a `traceql` input. The step writes its own assertions: no trace is saved.
+
+Point tests: `TestSearch`, `TestSearchNoMatch`, `TestTraceQL`.
+
+## 21. A request field of N items: grpc `data_repeat`
+
+```yaml
+- type: grpc
+  method: demo.v1.Orders/Place
+  data_json: '{{.order_payload}}'
+  data_repeat:
+    path: order.keywords
+    count: 1000
+    template: '{"id":"ent{{.index}}g","text":"{{.keyword_text}}"}'
+```
+
+The field at `path` (dot-separated, made when missing) of the request (`data`, `data_json`, or the one built by
+`request_from_reflection`) is set to `count` items, item i being `template`, a JSON text, with `{{.index}}` = i,
+executed inside the executor. `{{.index}}` survives the step interpolation as a var that is not defined, so
+`data_repeat` is not for a `range:` step, where `.index` is the range index. Every grpc call returns
+`result.request_size` and `result.request_sha256`, the size in bytes and the sha256 of the JSON request body sent; with
+`data_repeat` the result keeps no `result.request`, and the protocol file line carries the size and the sha256 in place
+of the request. Point test: `executors/grpc/data_repeat_test.go`.
+
+## 22. A passive exchange declare: rabbitmq `exchange_passive`
+
+`exchange_passive: true` checks that `exchange` exists instead of declaring it; a missing exchange fails the step with
+`exchange "<name>" does not exist: Exception (404) Reason: "NOT_FOUND - …"`. With `client_type` `publisher` or
+`subscriber` the passive check takes the place of the declare; with no `client_type` the step does only the check:
+
+```yaml
+- type: rabbitmq
+  addrs: '{{.amqp_url}}'
+  exchange: crawler.tasks
+  exchange_type: topic
+  exchange_passive: true
+```
+
+Point test: `executors/rabbitmq/exchange_test.go`.
+
+## 23. A file written with no shell: `type: writefile`
+
+```yaml
+- type: writefile
+  path: '{{.stand_dir}}/S0-R1.ready'
+  content: '{{.repair_lines}}'
+```
+
+`path` (required) is taken from the testsuite folder unless absolute; missing folders are made and an existing file is
+replaced. Result: `result.path` (absolute), `result.size`. Point test: `executors/writefile/writefile_test.go`.
+
 ## Build
 
 ```bash
