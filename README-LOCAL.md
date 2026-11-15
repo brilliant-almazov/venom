@@ -113,20 +113,27 @@ Point test: `interpolate/hashids_test.go`.
 for every testcase, whatever its outcome: passed, failed on a `Should…` assertion, failed on a `Must…` assertion, or
 skipped by `--stop-on-failure`. Sections:
 
-- `## Правильное поведение`: the `happens`, `expect`, `right` and `norm` info lines;
-- `## Что неправильно`: the `wrong` info lines;
-- `## Наличие данных`: one row per info line «precondition: <сущность> · <ключ> есть|нет — …» (the one form of
-  scenarios/TEMPLATE.*.yml) of a precondition step, the read through the API that proves the data is there or is not: сущность ·
-  ключ · запрос (the `call:` line of that step, else its method and url, or url, service and method) · есть/нет with ✅
-  when that read and the checks after it, up to the next call, held and «❌ не подтверждено» when one failed · trace id · whether the tested call
-  sent the key's value, with its request, so a call that looked for something else shows. No such line: «предусловия
-  нет»;
-- `## Факт`: the `point` and `call` info lines, then the step, code (`statuscode` or `code`), message and body of the call —
-  a step with a trace_id and a code, so trace_save and the check steps after the call are not taken —
-  the last failed call, or the last call when none failed, and the `fact` info lines;
-- `## Трасса`: the span tree `<trace_dir>/<trace_id>.md` of that call, looked up in every `trace_dir` and `traces` the
+- `## Expected behaviour`: the `happens`, `expect`, `right` and `norm` info lines;
+- `## What is wrong`: the `wrong` info lines;
+- `## State before`: every precondition read of the testcase with its request and answer;
+- `## Data presence`: one row per info line «precondition: <entity> · <key> present|absent — …» (the one form of
+  scenarios/TEMPLATE.*.yml) of a precondition step, the read through the API that proves the data is there or is not:
+  entity · key · request (the `call:` line of that step, else its method and url, or url, service and method) ·
+  present/absent with ✅ when that read and the checks after it, up to the next call, held and «❌ not confirmed» when one
+  failed · trace id · whether the tested call sent the key's value, with its request. No such line: «no precondition»;
+- `## Request`: the `point` and `call` info lines (a `call:` of several calls one call per line), the step, and what the
+  call sent: method, full url, headers (Authorization masked, X-Idempotency-Key shown) and the body, JSON one key per
+  line; a step that is not http shows the call fields of its interpolated step. The call is the step with the `call:`
+  info line when the testcase has one, else a step with a trace id and a code: the last failed call, else the last call;
+- `## Response`: the code, the trace id (result.trace_id, meta.trace_id of the body or the X-Trace-Id header), the
+  X-Trace-Id, Traceparent, X-Request-Id and X-Build headers and the body verbatim, and the `fact` info lines;
+- `## State after`: every later call of the testcase, the read-back after a write, with its request and answer;
+- `## Trace`: the span tree `<trace_dir>/<trace_id>.md` of that call, looked up in every `trace_dir` and `traces` the
   steps were given;
-- `## Вердикт`: ✅, ❌ with every failed assertion of every step, or ⏭ with the skip reason.
+- `## Verdict`: ✅, ❌ with every failed assertion of every step, or ⏭ with the skip reason.
+
+A testcase whose call returned a trace id while no tree `<dir>/<trace_id>.md` was saved fails (`traceGate`). The fork is
+English only: its code, tests, docs and the protocols it writes.
 
 The file name is the testcase name as written, row id first (`GW-B0005-…`, `S-001-…`), with spaces, `/`, `:` and the
 characters a file name cannot carry turned into `-`, at most 120 bytes; the testsuite folder is its slug.

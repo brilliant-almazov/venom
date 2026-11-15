@@ -14,7 +14,7 @@ import (
 	"github.com/ovh/venom/interpolate"
 )
 
-// protocolBodyMax caps a body printed under «Запрос», «Ответ» and «Состояние после вызова»; the rest is cut with a note.
+// protocolBodyMax caps a body printed under Request, Response and State after; the rest is cut with a note.
 const protocolBodyMax = 20000
 
 // protocolInfoLine reads an info line "key: value"; the " (file:line)" suffix Venom adds to step info is dropped.
@@ -60,7 +60,7 @@ func protocolFileName(name string) string {
 func protocolText(ts *TestSuite, tc *TestCase) string {
 	info := protocolInfo(tc)
 	var b strings.Builder
-	fmt.Fprintf(&b, "# %s\n\nФайл: `%s`\n\n", tc.Name, ts.Filepath)
+	fmt.Fprintf(&b, "# %s\n\nFile: `%s`\n\n", tc.Name, ts.Filepath)
 
 	b.WriteString(protocolHeadRight + "\n\n")
 	protocolKeys(&b, info, "happens", "expect", "right", "norm")
@@ -70,13 +70,15 @@ func protocolText(ts *TestSuite, tc *TestCase) string {
 
 	rows := protocolPresenceRows(tc)
 	call, n := protocolLastCall(tc, rows)
+	b.WriteString("\n" + protocolHeadBefore + "\n\n")
+	b.WriteString(protocolBefore(tc, rows))
 	b.WriteString("\n" + protocolHeadPresence + "\n\n")
 	b.WriteString(protocolPresenceTable(tc, rows, call))
 
 	b.WriteString("\n" + protocolHeadRequest + "\n\n")
 	protocolKeys(&b, info, "point", "call")
 	if call == nil {
-		b.WriteString("- результат вызова: вызова в testcase нет\n")
+		b.WriteString("- call result: the testcase has no call\n")
 	} else {
 		fmt.Fprintf(&b, protocolStepLine+"\n", n+1, call.Name)
 		b.WriteString(protocolRequestBlock(call))
@@ -84,7 +86,7 @@ func protocolText(ts *TestSuite, tc *TestCase) string {
 
 	b.WriteString("\n" + protocolHeadAnswer + "\n\n")
 	if call == nil {
-		b.WriteString("- вызова в testcase нет\n")
+		b.WriteString("- the testcase has no call\n")
 	} else {
 		b.WriteString(protocolResponseBlock(call))
 	}
@@ -138,7 +140,7 @@ func protocolKeys(b *strings.Builder, info map[string][]string, keys ...string) 
 	for _, k := range keys {
 		vals := info[k]
 		if len(vals) == 0 {
-			fmt.Fprintf(b, "- %s: не объявлено в info\n", k)
+			fmt.Fprintf(b, "- %s: not declared in info\n", k)
 			continue
 		}
 		for _, val := range vals {
@@ -148,7 +150,7 @@ func protocolKeys(b *strings.Builder, info map[string][]string, keys ...string) 
 }
 
 // protocolCallLines prints a «call:» line of several calls one call per line, each under the first, the «; » kept at
-// the end of the line (owner 2026-11-15: «Должно быть так отформатировано»).
+// the end of the line (owner 2026-11-15).
 func protocolCallLines(key, val string) string {
 	if key != "call" || !strings.Contains(val, "; ") {
 		return val
@@ -158,15 +160,15 @@ func protocolCallLines(key, val string) string {
 }
 
 // protocolPreconditionLine reads the precondition line of a read step, the one form of the scenario template
-// (scenarios/TEMPLATE.*.yml of cgw-qa-scenarios): "precondition: <entity> · <key> есть|нет — <what is read>".
-var protocolPreconditionLine = regexp.MustCompile(`^\s*precondition\s*:\s*(.+?)\s*·\s*(.+?)\s+(есть|нет)(?:\s+—.*?)?(?:\s+\([^()]+:\d+\))?\s*$`)
+// (scenarios/TEMPLATE.*.yml of cgw-qa-scenarios): "precondition: <entity> · <key> present|absent — <what is read>".
+var protocolPreconditionLine = regexp.MustCompile(`^\s*precondition\s*:\s*(.+?)\s*·\s*(.+?)\s+(present|absent)(?:\s+—.*?)?(?:\s+\([^()]+:\d+\))?\s*$`)
 
 type protocolPresenceRow struct {
 	entity, key, presence string
 	step                  int
 }
 
-// protocolPresenceRows are the precondition rows of the testcase, one per precondition line; the «данные есть: …» of an
+// protocolPresenceRows are the precondition rows of the testcase, one per precondition line; the «data present: …» of an
 // expect is the words of the scenario and makes no row.
 func protocolPresenceRows(tc *TestCase) []protocolPresenceRow {
 	var rows []protocolPresenceRow
@@ -204,7 +206,7 @@ func protocolIsCall(r *TestStepResult) bool {
 	return protocolTraced(r) && protocolHasCode(r)
 }
 
-// protocolPresenceTable is the section «Наличие данных»: entity, key, the precondition request, presence with ✅ when
+// protocolPresenceTable is the section State before: entity, key, the precondition request, presence with ✅ when
 // the assertions of that read held and ❌ when they did not, its trace, and whether the tested call sent that key.
 func protocolPresenceTable(tc *TestCase, rows []protocolPresenceRow, call *TestStepResult) string {
 	if len(rows) == 0 {
@@ -232,7 +234,7 @@ func protocolPresenceTable(tc *TestCase, rows []protocolPresenceRow, call *TestS
 // is seen next to the row.
 func protocolSentKey(key string, call, precondition *TestStepResult) string {
 	if call == nil || call == precondition {
-		return "проверяемого вызова нет"
+		return "no tested call"
 	}
 	value := key
 	if i := strings.Index(key, "="); i >= 0 {
@@ -351,21 +353,21 @@ func protocolBody(r *TestStepResult) string {
 // traces the steps of the testcase were given.
 func protocolTrace(tc *TestCase, call *TestStepResult) string {
 	if call == nil {
-		return "- " + protocolNoTrace + ": вызова в testcase нет\n"
+		return "- " + protocolNoTrace + ": the testcase has no call\n"
 	}
 	id := protocolTraceID(call)
 	if id == "" {
-		return "- " + protocolNoTrace + ": вызов не вернул trace_id ни в результате, ни в заголовке X-Trace-Id, ни в meta.trace_id тела\n"
+		return "- " + protocolNoTrace + ": the call returned no trace_id in its result, the X-Trace-Id header or meta.trace_id of the body\n"
 	}
 	f, tried := protocolTreeFile(tc, id)
 	if f != "" {
 		btes, err := os.ReadFile(f)
 		if err == nil {
-			return fmt.Sprintf("- trace_id: %s\n- файл: `%s`\n\n%s\n", id, f, strings.TrimRight(string(btes), "\n"))
+			return fmt.Sprintf("- trace_id: %s\n- file: `%s`\n\n%s\n", id, f, strings.TrimRight(string(btes), "\n"))
 		}
 	}
 	if len(tried) == 0 {
-		return fmt.Sprintf("- trace_id: %s\n"+protocolNoTree+" ни один шаг не получил trace_dir или traces\n", id)
+		return fmt.Sprintf("- trace_id: %s\n"+protocolNoTree+" no step was given trace_dir or traces\n", id)
 	}
 	return fmt.Sprintf("- trace_id: %s\n"+protocolNoTree+" %s\n", id, strings.Join(tried, ", "))
 }
@@ -398,14 +400,14 @@ func protocolVerdict(tc *TestCase) string {
 		}
 		for _, r := range tc.TestStepResults {
 			for _, s := range r.Skipped {
-				fmt.Fprintf(&b, "- шаг «%s»: %s\n", r.Name, s.Value)
+				fmt.Fprintf(&b, "- step \"%s\": %s\n", r.Name, s.Value)
 			}
 		}
 	default:
 		b.WriteString(protocolFailed + "\n")
 		for i, r := range tc.TestStepResults {
 			for _, e := range r.Errors {
-				fmt.Fprintf(&b, "- шаг %d «%s»: %s\n", i+1, r.Name, e.Value)
+				fmt.Fprintf(&b, "- step %d \"%s\": %s\n", i+1, r.Name, e.Value)
 			}
 		}
 	}

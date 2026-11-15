@@ -24,7 +24,7 @@ var protocolTraceKeys = []string{"result.trace_id", "result.bodyjson.meta.trace_
 
 // protocolTraceID is the trace id of a step result: protocolTraceKeys, then the X-Trace-Id answer header (any case),
 // then a "trace_id" of the raw answer body. Gateway calls that set no trace: on the http step return the id only in the
-// header and in meta.trace_id (run 15-5: 1 169 of 1 686 protocols said «трассы нет» though the gateway returned one).
+// header and in meta.trace_id (run 15-5: 1 169 of 1 686 protocols said there was no trace though the gateway returned one).
 func protocolTraceID(r *TestStepResult) string {
 	if r == nil {
 		return ""
@@ -73,7 +73,7 @@ func protocolTreeFile(tc *TestCase, id string) (string, []string) {
 }
 
 // traceGate fails a testcase whose call returned a trace id while no span tree of that id was saved: a protocol without
-// the trace is not accepted (owner 2026-11-15: «Я сказал только с трейсами протоколы»).
+// the trace is not accepted (owner 2026-11-15: protocols only with traces).
 func traceGate(tc *TestCase) {
 	if tc.Status == StatusSkip {
 		return
@@ -101,11 +101,11 @@ func protocolRequestBlock(r *TestStepResult) string {
 	if method, ok := r.ComputedVars["result.request.method"]; ok {
 		fmt.Fprintf(&b, protocolMethodLine+"%v\n- url: %v\n", method, r.ComputedVars["result.request.url"])
 		b.WriteString(protocolHeaders(r, "result.request.header.", nil))
-		b.WriteString(protocolBodyBlock("тело", fmt.Sprint(r.ComputedVars["result.request.body"])))
+		b.WriteString(protocolBodyBlock("body", fmt.Sprint(r.ComputedVars["result.request.body"])))
 		return b.String()
 	}
 	step := protocolStep(r)
-	fmt.Fprintf(&b, "- тип шага: %v\n", step["type"])
+	fmt.Fprintf(&b, "- step type: %v\n", step["type"])
 	for _, k := range []string{"method", "url", "gateway", "path", "service", "addr", "role"} {
 		if v, ok := step[k]; ok && fmt.Sprint(v) != "" {
 			fmt.Fprintf(&b, "- %s: %v\n", k, v)
@@ -148,7 +148,23 @@ func protocolResponseBlock(r *TestStepResult) string {
 		fmt.Fprintf(&b, "- trace_id: %s\n", id)
 	}
 	b.WriteString(protocolHeaders(r, "result.headers.", []string{"x-trace-id", "traceparent", "x-request-id", "x-build"}))
-	b.WriteString(protocolBodyBlock("тело", protocolBody(r)))
+	b.WriteString(protocolBodyBlock("body", protocolBody(r)))
+	return b.String()
+}
+
+// protocolBefore is the state before the call: each precondition read of the testcase with its request and answer.
+func protocolBefore(tc *TestCase, rows []protocolPresenceRow) string {
+	var b strings.Builder
+	for _, row := range rows {
+		r := &tc.TestStepResults[row.step]
+		fmt.Fprintf(&b, protocolAfterStep+"\n\n", row.step+1, r.Name, protocolRequest(r))
+		b.WriteString(protocolRequestBlock(r))
+		b.WriteString(protocolResponseBlock(r))
+		b.WriteString("\n")
+	}
+	if b.Len() == 0 {
+		return "no precondition read in the testcase\n"
+	}
 	return b.String()
 }
 
@@ -156,7 +172,7 @@ func protocolResponseBlock(r *TestStepResult) string {
 // its request and answer; none is said so.
 func protocolAfter(tc *TestCase, call *TestStepResult, n int) string {
 	if call == nil {
-		return "вызова в testcase нет\n"
+		return "the testcase has no call\n"
 	}
 	var b strings.Builder
 	for i := n + 1; i < len(tc.TestStepResults); i++ {
@@ -170,7 +186,7 @@ func protocolAfter(tc *TestCase, call *TestStepResult, n int) string {
 		b.WriteString("\n")
 	}
 	if b.Len() == 0 {
-		return "чтения назад после вызова в testcase нет\n"
+		return "no read-back after the call in the testcase\n"
 	}
 	return b.String()
 }
@@ -210,7 +226,7 @@ func protocolHeaders(r *TestStepResult, prefix string, only []string) string {
 	}
 	sort.Strings(names)
 	var b strings.Builder
-	b.WriteString("- заголовки:\n")
+	b.WriteString("- headers:\n")
 	for _, name := range names {
 		fmt.Fprintf(&b, "  - %s: %s\n", name, protocolMask(name, values[name]))
 	}
@@ -232,14 +248,14 @@ func protocolMask(name, value string) string {
 // protocolBodyBlock prints a body verbatim in a code block, a JSON body one key per line, cut at protocolBodyMax.
 func protocolBodyBlock(title, body string) string {
 	if body == "" || body == "<nil>" {
-		return fmt.Sprintf("- %s: пусто\n", title)
+		return fmt.Sprintf("- %s: empty\n", title)
 	}
 	var pretty bytes.Buffer
 	if json.Indent(&pretty, []byte(strings.TrimSpace(body)), "", "  ") == nil {
 		body = pretty.String()
 	}
 	if len(body) > protocolBodyMax {
-		body = body[:protocolBodyMax] + fmt.Sprintf("\n… обрезано, всего %d байт", len(body))
+		body = body[:protocolBodyMax] + fmt.Sprintf("\n… cut, %d bytes in all", len(body))
 	}
 	return fmt.Sprintf("- %s:\n\n```\n%s\n```\n", title, body)
 }

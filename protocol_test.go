@@ -266,6 +266,9 @@ func TestProtocolPresence(t *testing.T) {
 	assert.Contains(t, p, protocolHeadPresence+"\n\n"+protocolPresenceHeader)
 	assert.Contains(t, p, "| account | `id=7` | `GET /v1/billing/accounts/7` | "+protocolDataPresent+" ✅ | `0af7651916cd43dd8448eb211c80319c` | `7` "+protocolKeySent)
 	assert.Less(t, strings.Index(p, protocolHeadPresence), strings.Index(p, protocolHeadRequest), "the table goes before the main call")
+	before := p[strings.Index(p, protocolHeadBefore):strings.Index(p, protocolHeadPresence)]
+	assert.Contains(t, before, fmt.Sprintf(protocolAfterStep, 1, "caller", ""), "the precondition read with its request and answer")
+	assert.Contains(t, before, "- statuscode: 200")
 	assert.Equal(t, 1, strings.Count(p, "| account |"), "the expect line naming present data makes no row")
 
 	a := readProtocol(t, dir, "absent")
