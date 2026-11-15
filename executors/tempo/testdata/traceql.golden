@@ -1,0 +1,14 @@
+{
+  "query": "end=1700003600\u0026q=%7Bname%3D%22ReserveManager.CreateBySent%22%7D+%3E%3E+%7Bname%3D%22DialProvider.Dial%22%7D\u0026spss=50\u0026start=1700000000",
+  "result": {
+    "trace_id": "",
+    "trace_saved": "no",
+    "trace_file": "",
+    "tree_file": "",
+    "spans": 0,
+    "mismatch": "",
+    "trace_ids": "[\"00000000000000000000000000000abc\"]",
+    "span_list": "[{\"trace_id\":\"00000000000000000000000000000abc\",\"span_id\":\"s1\",\"name\":\"ReserveManager.CreateBySent\",\"start_unix_nano\":1000,\"end_unix_nano\":1500,\"duration_nanos\":500,\"attributes\":{\"unit\":\"u1\"}},{\"trace_id\":\"00000000000000000000000000000abc\",\"span_id\":\"s2\",\"name\":\"DialProvider.Dial\",\"start_unix_nano\":1600,\"end_unix_nano\":1700,\"duration_nanos\":100,\"attributes\":{}}]",
+    "count": 2
+  }
+}
