@@ -195,19 +195,22 @@ testcases:
     trace_dir: %[1]s
     info:
     - "call: GET /v1/billing/accounts/7"
-    - "expect: данные есть: account · id=7"
+    - "precondition: account · id=7 есть — чтение до проверяемого вызова"
+    - "expect: данные есть: account · id=7 — счёт читается"
     assertions:
     - result.statuscode MustEqual 200
   - type: caller
     code: 200
     url: /v1/billing/accounts/7/entries
+    info:
+    - "expect: данные есть: account · id=7 — записи счёта читаются"
 - name: absent
   steps:
   - type: caller
     code: 404
     info:
     - "call: GET /v1/billing/accounts/9223372036854775807"
-    - "expect: данных нет: account · id=9223372036854775807"
+    - "precondition: account · id=9223372036854775807 нет — чтение до проверяемого вызова"
     assertions:
     - result.statuscode MustEqual 404
   - type: caller
@@ -218,7 +221,7 @@ testcases:
   - type: caller
     code: 404
     info:
-    - "expect: данные есть: account · id=7"
+    - "precondition: account · id=7 есть — чтение до проверяемого вызова"
     assertions:
     - result.statuscode MustEqual 200
   - type: caller
@@ -237,6 +240,7 @@ func TestProtocolPresence(t *testing.T) {
 	assert.Contains(t, p, "## Наличие данных\n\n| сущность | ключ | запрос | есть/нет | trace id | ключ в проверяемом вызове |")
 	assert.Contains(t, p, "| account | `id=7` | `GET /v1/billing/accounts/7` | данные есть ✅ | `0af7651916cd43dd8448eb211c80319c` | `7` ✅ отправлен")
 	assert.Less(t, strings.Index(p, "## Наличие данных"), strings.Index(p, "## Факт"), "the table goes before the main call")
+	assert.Equal(t, 1, strings.Count(p, "| account |"), "the expect «данные есть: …» of the call makes no row")
 
 	a := readProtocol(t, dir, "absent")
 	assert.Contains(t, a, "| account | `id=9223372036854775807` | `GET /v1/billing/accounts/9223372036854775807` | данных нет ✅ |")
@@ -268,7 +272,7 @@ testcases:
     code: 200
     trace_dir: %[1]s
     info:
-    - "precondition: account id=7 есть — чтение до проверяемого вызова"
+    - "precondition: account · id=7 есть — чтение до проверяемого вызова"
   - type: checker
     out: "1"
     assertions:
@@ -281,7 +285,7 @@ testcases:
   - type: caller
     code: 200
     info:
-    - "precondition: account id=7 есть — чтение до проверяемого вызова"
+    - "precondition: account · id=7 есть — чтение до проверяемого вызова"
   - type: checker
     out: "0"
     assertions:

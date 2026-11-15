@@ -146,27 +146,22 @@ func protocolKeys(b *strings.Builder, info map[string][]string, keys ...string) 
 	}
 }
 
-// protocolPresence reads an info line of a precondition step, with or without a key in front ("expect: …"):
-// «данные есть: <entity> · <key>» or «данных нет: <entity> · <key>».
-var protocolPresence = regexp.MustCompile(`(?:^|:\s*)(данные есть|данных нет)\s*:\s*(.+?)\s*·\s*(.+?)(?:\s+\([^()]+:\d+\))?\s*$`)
-
-// protocolPreconditionLine reads the precondition line of the scenario template (scenarios/TEMPLATE.*.yml of
-// cgw-qa-scenarios): "precondition: <entity> <key> есть|нет — <what is read>".
-var protocolPreconditionLine = regexp.MustCompile(`^\s*precondition\s*:\s*(\S+)\s+(.+?)\s+(есть|нет)(?:\s+—.*?)?(?:\s+\([^()]+:\d+\))?\s*$`)
+// protocolPreconditionLine reads the precondition line of a read step, the one form of the scenario template
+// (scenarios/TEMPLATE.*.yml of cgw-qa-scenarios): "precondition: <entity> · <key> есть|нет — <what is read>".
+var protocolPreconditionLine = regexp.MustCompile(`^\s*precondition\s*:\s*(.+?)\s*·\s*(.+?)\s+(есть|нет)(?:\s+—.*?)?(?:\s+\([^()]+:\d+\))?\s*$`)
 
 type protocolPresenceRow struct {
 	entity, key, presence string
 	step                  int
 }
 
-// protocolPresenceRows are the precondition rows of the testcase, one per precondition info line.
+// protocolPresenceRows are the precondition rows of the testcase, one per precondition line; the «данные есть: …» of an
+// expect is the words of the scenario and makes no row.
 func protocolPresenceRows(tc *TestCase) []protocolPresenceRow {
 	var rows []protocolPresenceRow
 	for i, r := range tc.TestStepResults {
 		for _, l := range r.ComputedInfo {
-			if m := protocolPresence.FindStringSubmatch(l); m != nil {
-				rows = append(rows, protocolPresenceRow{entity: m[2], key: m[3], presence: m[1], step: i})
-			} else if m := protocolPreconditionLine.FindStringSubmatch(l); m != nil {
+			if m := protocolPreconditionLine.FindStringSubmatch(l); m != nil {
 				presence := "данные есть"
 				if m[3] == "нет" {
 					presence = "данных нет"

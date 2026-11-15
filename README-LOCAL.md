@@ -115,9 +115,8 @@ skipped by `--stop-on-failure`. Sections:
 
 - `## Правильное поведение`: the `happens`, `expect`, `right` and `norm` info lines;
 - `## Что неправильно`: the `wrong` info lines;
-- `## Наличие данных`: one row per info line «данные есть: <сущность> · <ключ>» or «данных нет: <сущность> · <ключ>» (bare or
-  after `expect:`), or «precondition: <сущность> <ключ> есть|нет — …» (the form of scenarios/TEMPLATE.*.yml), of a
-  precondition step, the read through the API that proves the data is there or is not: сущность ·
+- `## Наличие данных`: one row per info line «precondition: <сущность> · <ключ> есть|нет — …» (the one form of
+  scenarios/TEMPLATE.*.yml) of a precondition step, the read through the API that proves the data is there or is not: сущность ·
   ключ · запрос (the `call:` line of that step, else its method and url, or url, service and method) · есть/нет with ✅
   when that read and the checks after it, up to the next call, held and «❌ не подтверждено» when one failed · trace id · whether the tested call
   sent the key's value, with its request, so a call that looked for something else shows. No such line: «предусловия
