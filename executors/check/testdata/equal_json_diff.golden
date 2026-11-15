@@ -1,0 +1,2 @@
+value {"grpcServices":["b.v1.B","a.v1.A",{"m":1,"n":2}],"protoVersion":"v1.4.0"}
+equal_json {"grpcServices":[{"m":1,"n":2},"a.v1.A","b.v1.B"],"protoVersion":"v1.4.0"}
