@@ -257,7 +257,7 @@ func protocolStep(r *TestStepResult) map[string]interface{} {
 func protocolRequest(r *TestStepResult) string {
 	m := protocolStep(r)
 	str := func(k string) string { return protocolField(m[k]) }
-	if method, ok := r.ComputedVars["result.request.method"]; ok {
+	if method, ok := protocolHTTPMethod(r); ok {
 		return fmt.Sprintf("`%s %v %v`", str("type"), method, r.ComputedVars["result.request.url"])
 	}
 	if str("service") != "" {

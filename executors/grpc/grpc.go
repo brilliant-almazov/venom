@@ -74,6 +74,10 @@ type Executor struct {
 	// Parallel: N > 1 sends the same request N times at once and returns a ParallelResult (codes, bodies,
 	// distinct_bodies, trace_ids and calls in call order; the first call as the plain fields).
 	Parallel int `json:"parallel" yaml:"parallel" mapstructure:"parallel"`
+	// RequestFromReflection builds the request message of the method from the descriptor source (BuildRequest), Fill
+	// giving the value of a field by its dot-separated path; data or data_json, when given, are merged over it.
+	RequestFromReflection bool              `json:"request_from_reflection" yaml:"request_from_reflection" mapstructure:"request_from_reflection"`
+	Fill                  map[string]string `json:"fill" yaml:"fill" mapstructure:"fill"`
 }
 
 // Result represents a step result
@@ -91,6 +95,8 @@ type Result struct {
 	TraceID       string        `json:"trace_id,omitempty" yaml:"trace_id,omitempty"`
 	TraceSaved    string        `json:"trace_saved,omitempty" yaml:"trace_saved,omitempty"`
 	TraceFile     string        `json:"trace_file,omitempty" yaml:"trace_file,omitempty"`
+	// Request is the request message sent, as JSON.
+	Request interface{} `json:"request,omitempty" yaml:"request,omitempty"`
 }
 
 type customHandler struct {
@@ -314,6 +320,20 @@ func (Executor) Run(ctx context.Context, step venom.TestStep) (interface{}, erro
 			cc = nil
 		}
 	}()
+
+	if e.RequestFromReflection {
+		over := data
+		if e.DataJSON == "" && len(e.Data) == 0 {
+			over = nil
+		}
+		if data, err = requestFromReflection(descSource, e.Service, e.Method, e.Fill, over); err != nil {
+			return nil, err
+		}
+	}
+	var sent interface{}
+	if venom.JSONUnmarshal(data, &sent) == nil {
+		result.Request = sent
+	}
 
 	// prepare request and send
 	in := bytes.NewReader(data)

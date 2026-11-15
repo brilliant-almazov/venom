@@ -226,6 +226,27 @@ exception). The `Expected behaviour` section of a protocol is built only from th
 `right` and `norm`; the text of a `call:` info line is printed nowhere. Point tests: `declarative_test.go`,
 `TestProtocolExpectedFromInfoKeysOnly`.
 
+## 16. Request inputs built from a spec: grpc `request_from_reflection`, openapi plan, cli health `baseline`
+
+grpc: `request_from_reflection: true` builds the request message of `method` from server reflection (or `protoset`,
+`proto_files`): every singular field outside a oneof that is not proto3 optional; a value from `fill: {<field path>:
+<value>}` (dot-separated path, proto or JSON field name) converted to the field type — 64-bit integers, enums and
+strings as given, numbers, bools, JSON for a message or a repeated field — else the first enum value that is not
+`*_UNSPECIFIED`, `1` for numbers (`"1"` for 64-bit), `"qa"` for strings, `false` for bools; nested messages the same
+way, Timestamp `2026-01-01T00:00:00Z`, Duration `1s`, wrappers by their value, Struct, Any, FieldMask and Empty left
+out. `data` or `data_json`, when given, are merged over it. Every grpc call returns the message sent as
+`result.request`. Point test: `executors/grpc/request_from_reflection_test.go`.
+
+openapi: `fill: [names]` non-required body fields filled by example or enum; `omit: [names]` body fields and query
+params left out; `static: {name: value}` body fields set as given; `rows: '<JSON of a list answer>'` gives a field or
+parameter with no example or enum the same field (name compared without case and `_`) of the first item of
+`data.items`, `data` or `items`; `query_fields: [names]` optional query params added, each by its minimum, then its
+value. Result keys stay `body` and `query`. Point test: `executors/openapi/openapi_test.go`.
+
+cli: an action `health` returns `result.red`, its ✗ rows of systemout and systemerr with the leading spaces and the
+trailing duration removed, sorted, and `result.red_new`, the red rows not red in `baseline: '<systemout of an earlier
+health step>'`; one row per line, empty when none. Point test: `executors/cli/cli_test.go`.
+
 ## Build
 
 ```bash

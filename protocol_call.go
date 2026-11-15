@@ -98,7 +98,7 @@ func traceGate(tc *TestCase) {
 // JSON one key per line; a step that is not http shows its declared fields from the interpolated step, never a script.
 func protocolRequestBlock(r *TestStepResult) string {
 	var b strings.Builder
-	if method, ok := r.ComputedVars["result.request.method"]; ok {
+	if method, ok := protocolHTTPMethod(r); ok {
 		fmt.Fprintf(&b, protocolMethodLine+"%v\n- url: %v\n", method, r.ComputedVars["result.request.url"])
 		b.WriteString(protocolHeaders(r, "result.request.header.", nil))
 		b.WriteString(protocolBodyBlock("body", fmt.Sprint(r.ComputedVars["result.request.body"])))
@@ -267,4 +267,12 @@ func protocolSorted(m map[string]interface{}) []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+// protocolHTTPMethod is the method of an http call: result.request.method with result.request.url next to it, so the
+// request message of a grpc call (result.request) with a field named method is not taken for one.
+func protocolHTTPMethod(r *TestStepResult) (interface{}, bool) {
+	method, ok := r.ComputedVars["result.request.method"]
+	_, hasURL := r.ComputedVars["result.request.url"]
+	return method, ok && hasURL && r.ComputedVars["result.request.service"] == nil
 }
