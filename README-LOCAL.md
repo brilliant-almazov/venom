@@ -193,8 +193,15 @@ The `tempo` executor (`trace_id`, `tempo_url`, `trace_dir`, `wait` seconds, defa
 calls save `<trace_dir>/<trace_id>.json` and, next to it, the span tree `<trace_dir>/<trace_id>.md`: one span per line
 under its parent, `- <service> · <span> · <ms> ms · ✅`, `❌ <status message>` on an error status. The protocol prints
 this file under Trace and the trace gate fails a call whose tree is missing. Result: `result.trace_id`,
-`result.trace_saved` (`yes`, `late`, `no`), `result.trace_file`, `result.tree_file`, `result.spans`. Point test:
-`executors/tempo/tempo_test.go`.
+`result.trace_saved` (`yes`, `late`, `no`), `result.trace_file`, `result.tree_file`, `result.spans`, `result.mismatch`.
+
+The `tempo` step checks the saved trace with no shell: `contains`, `not_contains` (lists of substrings) and `matches`
+(list of Go regexps) are matched over one line per span, `<service> · <span> · <status> · <key>=<value> · …`
+(status `✅` or `❌ <message>`, attributes sorted by key). Each `contains` item must be in some span line, no
+`not_contains` item in any, each `matches` regexp must match some line; `result.mismatch` names each item that does
+not hold, one per line, and is empty when all hold or none is given (`the trace is not saved, nothing to check` when
+the trace is not saved). Default assertions: `result.trace_saved ShouldEqual yes`, `result.mismatch ShouldBeEmpty`.
+Point test: `executors/tempo/tempo_test.go`.
 
 ## 14. A wait with no shell: `type: wait`
 

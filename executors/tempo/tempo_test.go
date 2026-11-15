@@ -98,3 +98,47 @@ func TestSaveWritesTree(t *testing.T) {
 		t.Fatalf("tree %q err %v", body, err)
 	}
 }
+
+const attrTrace = `{"batches":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"svc-crawler"}}]},
+ "scopeSpans":[{"spans":[
+  {"spanId":"a","name":"Publish","startTimeUnixNano":"1","endTimeUnixNano":"2","attributes":[
+   {"key":"messaging.destination","value":{"stringValue":"crawler.tasks"}},{"key":"rows","value":{"intValue":"3"}},{"key":"retry","value":{"boolValue":false}}]},
+  {"spanId":"b","parentSpanId":"a","name":"Store","startTimeUnixNano":"3","endTimeUnixNano":"4","status":{"code":2,"message":"timeout"}}]}]}]}`
+
+func TestSpanLines(t *testing.T) {
+	got := SpanLines([]byte(attrTrace))
+	want := []string{"svc-crawler · Publish · ✅ · messaging.destination=crawler.tasks · retry=false · rows=3", "svc-crawler · Store · ❌ timeout"}
+	if len(got) != 2 || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("lines %q", got)
+	}
+}
+
+func TestMismatch(t *testing.T) {
+	lines := SpanLines([]byte(attrTrace))
+	m, err := Mismatch(lines, []string{"Publish", "rows=3"}, []string{"Delete"}, []string{`Store · ❌`})
+	if err != nil || m != "" {
+		t.Fatalf("all hold, got %q %v", m, err)
+	}
+	m, err = Mismatch(lines, []string{"rows=4"}, []string{"timeout"}, []string{`^svc-billing`})
+	want := "no span contains \"rows=4\"\nspan \"svc-crawler · Store · ❌ timeout\" contains \"timeout\"\nno span matches \"^svc-billing\""
+	if err != nil || m != want {
+		t.Fatalf("mismatch %q %v", m, err)
+	}
+	if _, err := Mismatch(lines, nil, nil, []string{"("}); err == nil {
+		t.Fatal("a bad regexp is an error")
+	}
+}
+
+func TestRunChecksTheSavedTrace(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(attrTrace)) }))
+	defer srv.Close()
+	step := map[string]interface{}{"trace_id": "0123456789abcdef0123456789abcdef", "tempo_url": srv.URL, "trace_dir": t.TempDir(),
+		"contains": []string{"messaging.destination=crawler.tasks"}, "not_contains": []string{"❌"}}
+	out, err := Executor{}.Run(context.Background(), step)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m := out.(Result).Mismatch; m != "span \"svc-crawler · Store · ❌ timeout\" contains \"❌\"" {
+		t.Fatalf("mismatch %q", m)
+	}
+}

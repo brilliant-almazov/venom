@@ -3,6 +3,9 @@
 // Next to <trace_dir>/<trace_id>.json the span tree is written as <trace_dir>/<trace_id>.md (Render): the file the
 // protocol prints under Trace and the trace gate looks for.
 //
+// `contains`, `not_contains` and `matches` check the saved trace with no shell, over one line per span
+// "<service> · <span> · <status> · <key>=<value> …" (SpanLines); result.mismatch names each item that does not hold.
+//
 // A trace is saved when GET <tempo_url>/api/traces/<trace_id> answers 200 with at least one batch (or resourceSpans).
 // Save polls every 500 ms up to `wait`; when the trace is not ingested yet, a late fetch keeps polling in the background
 // (every 2 s up to LateWait) while the venom process lives, and the result says "late".
@@ -40,12 +43,16 @@ func New() venom.Executor {
 	return &Executor{}
 }
 
-// Executor saves one trace: trace_id, tempo_url, trace_dir, wait (seconds, default 20).
+// Executor saves one trace: trace_id, tempo_url, trace_dir, wait (seconds, default 20), and checks it by contains,
+// not_contains and matches.
 type Executor struct {
-	TraceID  string `json:"trace_id" yaml:"trace_id" mapstructure:"trace_id"`
-	TempoURL string `json:"tempo_url" yaml:"tempo_url" mapstructure:"tempo_url"`
-	TraceDir string `json:"trace_dir" yaml:"trace_dir" mapstructure:"trace_dir"`
-	Wait     int    `json:"wait" yaml:"wait" mapstructure:"wait"`
+	TraceID     string   `json:"trace_id" yaml:"trace_id" mapstructure:"trace_id"`
+	TempoURL    string   `json:"tempo_url" yaml:"tempo_url" mapstructure:"tempo_url"`
+	TraceDir    string   `json:"trace_dir" yaml:"trace_dir" mapstructure:"trace_dir"`
+	Wait        int      `json:"wait" yaml:"wait" mapstructure:"wait"`
+	Contains    []string `json:"contains" yaml:"contains" mapstructure:"contains"`
+	NotContains []string `json:"not_contains" yaml:"not_contains" mapstructure:"not_contains"`
+	Matches     []string `json:"matches" yaml:"matches" mapstructure:"matches"`
 }
 
 // Result of the executor.
@@ -55,6 +62,7 @@ type Result struct {
 	TraceFile  string `json:"trace_file" yaml:"trace_file"`
 	TreeFile   string `json:"tree_file" yaml:"tree_file"`
 	Spans      int    `json:"spans" yaml:"spans"`
+	Mismatch   string `json:"mismatch" yaml:"mismatch"`
 }
 
 // ZeroValueResult returns an empty result.
@@ -62,9 +70,9 @@ func (Executor) ZeroValueResult() interface{} {
 	return Result{}
 }
 
-// GetDefaultAssertions: the trace is saved.
+// GetDefaultAssertions: the trace is saved and its checks hold.
 func (Executor) GetDefaultAssertions() *venom.StepAssertions {
-	return &venom.StepAssertions{Assertions: []venom.Assertion{"result.trace_saved ShouldEqual yes"}}
+	return &venom.StepAssertions{Assertions: []venom.Assertion{"result.trace_saved ShouldEqual yes", "result.mismatch ShouldBeEmpty"}}
 }
 
 // Run saves the trace.
@@ -85,6 +93,22 @@ func (Executor) Run(ctx context.Context, step venom.TestStep) (interface{}, erro
 	if saved == "yes" {
 		r.TreeFile = strings.TrimSuffix(file, ".json") + ".md"
 	}
+	if len(e.Contains)+len(e.NotContains)+len(e.Matches) == 0 {
+		return r, nil
+	}
+	if saved != "yes" {
+		r.Mismatch = "the trace is not saved, nothing to check"
+		return r, nil
+	}
+	body, err := os.ReadFile(file)
+	if err != nil {
+		return nil, err
+	}
+	mismatch, err := Mismatch(SpanLines(body), e.Contains, e.NotContains, e.Matches)
+	if err != nil {
+		return nil, err
+	}
+	r.Mismatch = mismatch
 	return r, nil
 }
 
