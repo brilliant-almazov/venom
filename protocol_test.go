@@ -62,7 +62,7 @@ func runProtocolSuite(t *testing.T, suite string, stopOnFailure bool) string {
 
 func readProtocol(t *testing.T, dir, testcase string) string {
 	t.Helper()
-	btes, err := os.ReadFile(filepath.Join(dir, "suite", testcase+".md"))
+	btes, err := os.ReadFile(filepath.Join(dir, "suite", protocolFileName(testcase)+".md"))
 	require.NoError(t, err, "protocol of %s", testcase)
 	return string(btes)
 }
@@ -186,39 +186,75 @@ testcases:
 	assert.Contains(t, p, "svc-billing ✅ GetAccount")
 }
 
-func TestProtocolPrecondition(t *testing.T) {
-	dir := runProtocolSuite(t, `name: suite
+const presenceSuite = `name: suite
 testcases:
 - name: present
-`+testcaseInfo+`  steps:
+` + testcaseInfo + `  steps:
   - type: caller
     code: 200
-    trace_dir: %s
+    trace_dir: %[1]s
     info:
-    - "precondition: account id=7 есть"
-    - "expect: данные есть: account id=7"
+    - "call: GET /v1/billing/accounts/7"
+    - "expect: данные есть: account · id=7"
     assertions:
     - result.statuscode MustEqual 200
   - type: caller
     code: 200
+    url: /v1/billing/accounts/7/entries
 - name: absent
   steps:
   - type: caller
-    code: 200
+    code: 404
     info:
-    - "precondition: account id=9223372036854775807 нет"
+    - "call: GET /v1/billing/accounts/9223372036854775807"
+    - "expect: данных нет: account · id=9223372036854775807"
     assertions:
     - result.statuscode MustEqual 404
   - type: caller
     code: 404
-`, false)
+    url: /v1/billing/accounts/42
+- name: failed
+  steps:
+  - type: caller
+    code: 404
+    info:
+    - "expect: данные есть: account · id=7"
+    assertions:
+    - result.statuscode MustEqual 200
+  - type: caller
+    code: 200
+    url: /v1/billing/accounts/7
+- name: none
+  steps:
+  - type: caller
+    code: 200
+`
+
+func TestProtocolPresence(t *testing.T) {
+	dir := runProtocolSuite(t, presenceSuite, false)
+
 	p := readProtocol(t, dir, "present")
-	assert.Contains(t, p, "### Предусловие\n\n| сущность | ключ | есть/нет | trace |")
-	assert.Contains(t, p, "| account | `id=7` | есть ✅ | `0af7651916cd43dd8448eb211c80319c` |")
-	assert.Contains(t, p, "- expect: данные есть: account id=7")
-	assert.Less(t, strings.Index(p, "### Предусловие"), strings.Index(p, "- шаг:"), "the table goes before the main call")
+	assert.Contains(t, p, "## Наличие данных\n\n| сущность | ключ | запрос | есть/нет | trace id | ключ в проверяемом вызове |")
+	assert.Contains(t, p, "| account | `id=7` | `GET /v1/billing/accounts/7` | данные есть ✅ | `0af7651916cd43dd8448eb211c80319c` | `7` ✅ отправлен")
+	assert.Less(t, strings.Index(p, "## Наличие данных"), strings.Index(p, "## Факт"), "the table goes before the main call")
+
 	a := readProtocol(t, dir, "absent")
-	assert.Contains(t, a, "| account | `id=9223372036854775807` | нет ❌ |")
-	assert.Contains(t, a, "шаг 1 «caller»", "the testcase fails at the precondition")
-	assert.Contains(t, a, "result.statuscode MustEqual 404")
+	assert.Contains(t, a, "| account | `id=9223372036854775807` | `GET /v1/billing/accounts/9223372036854775807` | данных нет ✅ |")
+	assert.Contains(t, a, "`9223372036854775807` ❌ не отправлен", "the tested call looked for another id")
+
+	f := readProtocol(t, dir, "failed")
+	assert.Contains(t, f, "данные есть ❌ не подтверждено")
+	assert.Contains(t, f, "❌ не пройден")
+	assert.Contains(t, f, "result.statuscode MustEqual 200", "the testcase fails at the precondition")
+	assert.Contains(t, f, "- шаг: 1 «caller»", "the fact is the failed precondition read")
+
+	n := readProtocol(t, dir, "none")
+	assert.Contains(t, n, "## Наличие данных\n\nпредусловия нет\n")
+	assert.NotContains(t, n, "| сущность |")
+}
+
+func TestProtocolFileNameKeepsRowID(t *testing.T) {
+	assert.Equal(t, "GW-B0005-DELETE-v1-billing-accounts-{account_id}-без-ключа", protocolFileName("GW-B0005 DELETE /v1/billing/accounts/{account_id} без ключа"))
+	assert.Equal(t, "S-001-CreateAccount", protocolFileName("S-001: CreateAccount"))
+	assert.Equal(t, "testcase", protocolFileName(" / "))
 }

@@ -34,10 +34,27 @@ func (v *Venom) writeProtocol(ctx context.Context, ts *TestSuite, tc *TestCase) 
 		Error(ctx, "unable to create protocol dir %s: %v", dir, err)
 		return
 	}
-	file := filepath.Join(dir, slug.Make(tc.Name)+".md")
+	file := filepath.Join(dir, protocolFileName(tc.Name)+".md")
 	if err := os.WriteFile(file, []byte(HideSensitive(ctx, protocolText(ts, tc))), 0o644); err != nil {
 		Error(ctx, "unable to write protocol %s: %v", file, err)
 	}
+}
+
+// protocolUnsafe are the runs of characters a file name cannot carry or that split it badly.
+var protocolUnsafe = regexp.MustCompile(`[\s/\\:*?"<>|]+`)
+
+// protocolFileName keeps the testcase name as it is, case and row id first (GW-B0005 …, S-001 …), so a reader finds the
+// protocol by the row id; separators and characters a file name cannot carry become "-", the length stays under 120 bytes.
+func protocolFileName(name string) string {
+	n := strings.Trim(protocolUnsafe.ReplaceAllString(name, "-"), "-.")
+	for len(n) > 120 {
+		r := []rune(n)
+		n = string(r[:len(r)-1])
+	}
+	if n == "" {
+		return "testcase"
+	}
+	return n
 }
 
 func protocolText(ts *TestSuite, tc *TestCase) string {
@@ -51,10 +68,13 @@ func protocolText(ts *TestSuite, tc *TestCase) string {
 	b.WriteString("\n## Что неправильно\n\n")
 	protocolKeys(&b, info, "wrong")
 
+	rows := protocolPresenceRows(tc)
+	call, n := protocolLastCall(tc, rows)
+	b.WriteString("\n## Наличие данных\n\n")
+	b.WriteString(protocolPresenceTable(tc, rows, call))
+
 	b.WriteString("\n## Факт\n\n")
-	b.WriteString(protocolPreconditions(tc))
 	protocolKeys(&b, info, "point", "call")
-	call, n := protocolLastCall(tc)
 	if call == nil {
 		b.WriteString("- результат вызова: вызова в testcase нет\n")
 	} else {
@@ -126,45 +146,113 @@ func protocolKeys(b *strings.Builder, info map[string][]string, keys ...string) 
 	}
 }
 
-// protocolPrecondition reads the info line of a precondition step: "precondition: <entity> <key>=<value> есть|нет".
-var protocolPrecondition = regexp.MustCompile(`^\s*precondition\s*:\s*(.+?)\s+(\S+=\S+)\s+(есть|нет)(?:\s+\([^()]+:\d+\))?\s*$`)
+// protocolPresence reads an info line of a precondition step, with or without a key in front ("expect: …"):
+// «данные есть: <entity> · <key>» or «данных нет: <entity> · <key>».
+var protocolPresence = regexp.MustCompile(`(?:^|:\s*)(данные есть|данных нет)\s*:\s*(.+?)\s*·\s*(.+?)(?:\s+\([^()]+:\d+\))?\s*$`)
 
-// protocolPreconditions prints a table of the precondition steps of the testcase, one row per entity, before the main
-// call: entity, key, the expected presence with ✅ when the read held and ❌ when it did not, the trace of the read.
-func protocolPreconditions(tc *TestCase) string {
-	var rows []string
-	for _, r := range tc.TestStepResults {
-		for _, l := range r.ComputedInfo {
-			m := protocolPrecondition.FindStringSubmatch(l)
-			if m == nil {
-				continue
-			}
-			mark := "✅"
-			if r.Status == StatusFail {
-				mark = "❌"
-			}
-			trace := "—"
-			if id := fmt.Sprint(r.ComputedVars["result.trace_id"]); r.ComputedVars["result.trace_id"] != nil && id != "" {
-				trace = "`" + id + "`"
-			}
-			rows = append(rows, fmt.Sprintf("| %s | `%s` | %s %s | %s |", m[1], m[2], m[3], mark, trace))
-		}
-	}
-	if len(rows) == 0 {
-		return ""
-	}
-	return "### Предусловие\n\n| сущность | ключ | есть/нет | trace |\n| -- | -- | -- | -- |\n" + strings.Join(rows, "\n") + "\n\n"
+type protocolPresenceRow struct {
+	entity, key, presence string
+	step                  int
 }
 
-// protocolLastCall is the call of the testcase: a step result with a trace_id and a code — result.statuscode (http) or
+// protocolPresenceRows are the precondition rows of the testcase, one per info line with the fixed prefix.
+func protocolPresenceRows(tc *TestCase) []protocolPresenceRow {
+	var rows []protocolPresenceRow
+	for i, r := range tc.TestStepResults {
+		for _, l := range r.ComputedInfo {
+			if m := protocolPresence.FindStringSubmatch(l); m != nil {
+				rows = append(rows, protocolPresenceRow{entity: m[2], key: m[3], presence: m[1], step: i})
+			}
+		}
+	}
+	return rows
+}
+
+// protocolPresenceTable is the section «Наличие данных»: entity, key, the precondition request, presence with ✅ when
+// the assertions of that read held and ❌ when they did not, its trace, and whether the tested call sent that key.
+func protocolPresenceTable(tc *TestCase, rows []protocolPresenceRow, call *TestStepResult) string {
+	if len(rows) == 0 {
+		return "предусловия нет\n"
+	}
+	var b strings.Builder
+	b.WriteString("| сущность | ключ | запрос | есть/нет | trace id | ключ в проверяемом вызове |\n| -- | -- | -- | -- | -- | -- |\n")
+	for _, row := range rows {
+		r := &tc.TestStepResults[row.step]
+		mark := "✅"
+		if r.Status == StatusFail {
+			mark = "❌ не подтверждено"
+		}
+		trace := "—"
+		if id := fmt.Sprint(r.ComputedVars["result.trace_id"]); r.ComputedVars["result.trace_id"] != nil && id != "" {
+			trace = "`" + id + "`"
+		}
+		fmt.Fprintf(&b, "| %s | `%s` | %s | %s %s | %s | %s |\n", row.entity, row.key, protocolRequest(r), row.presence, mark, trace,
+			protocolSentKey(row.key, call, r))
+	}
+	return b.String()
+}
+
+// protocolSentKey says whether the tested call carries the value of the key, so a call that looked for something else
+// is seen next to the row.
+func protocolSentKey(key string, call, precondition *TestStepResult) string {
+	if call == nil || call == precondition {
+		return "проверяемого вызова нет"
+	}
+	value := key
+	if i := strings.Index(key, "="); i >= 0 {
+		value = key[i+1:]
+	}
+	req := protocolStep(call)
+	delete(req, "info")
+	delete(req, "assertions")
+	delete(req, "vars")
+	if value != "" && strings.Contains(fmt.Sprint(req), value) {
+		return fmt.Sprintf("`%s` ✅ отправлен: %s", value, protocolRequest(call))
+	}
+	return fmt.Sprintf("`%s` ❌ не отправлен: %s", value, protocolRequest(call))
+}
+
+// protocolStep is the step after interpolation; Interpolated holds it as YAML bytes (process_testcase.go).
+func protocolStep(r *TestStepResult) map[string]interface{} {
+	m := map[string]interface{}{}
+	if raw, ok := r.Interpolated.([]byte); ok {
+		_ = yaml.Unmarshal(raw, &m)
+	}
+	return m
+}
+
+// protocolRequest names the request of a step: its «call:» info line, else method and url (http), else url, service and
+// method (grpc), else the step type.
+func protocolRequest(r *TestStepResult) string {
+	for _, l := range r.ComputedInfo {
+		if m := protocolInfoLine.FindStringSubmatch(l); m != nil && m[1] == "call" {
+			return "`" + m[2] + "`"
+		}
+	}
+	m := protocolStep(r)
+	str := func(k string) string { s, _ := m[k].(string); return s }
+	switch {
+	case str("url") != "" && str("method") != "" && str("service") == "":
+		return fmt.Sprintf("`%s %s`", str("method"), str("url"))
+	case str("service") != "" || str("method") != "":
+		return fmt.Sprintf("`grpc %s %s/%s`", str("url"), str("service"), str("method"))
+	}
+	return "`" + str("type") + "`"
+}
+
+// protocolLastCall is the call of the testcase, a passed precondition read left out: a step result with a trace_id and a code — result.statuscode (http) or
 // result.code (grpc and the user executors that pass a call code on). The last failed call wins, then the last call;
 // trace_save (a trace_id, no code) and check steps (a code, no trace_id) are not calls. With no such step the last step
 // with a code is taken.
-func protocolLastCall(tc *TestCase) (*TestStepResult, int) {
+func protocolLastCall(tc *TestCase, rows []protocolPresenceRow) (*TestStepResult, int) {
+	precondition := map[int]bool{}
+	for _, row := range rows {
+		precondition[row.step] = true
+	}
 	traced, coded := -1, -1
 	for i := len(tc.TestStepResults) - 1; i >= 0; i-- {
 		r := &tc.TestStepResults[i]
-		if !protocolHasCode(r) {
+		if !protocolHasCode(r) || (precondition[i] && r.Status != StatusFail) {
 			continue
 		}
 		if _, ok := r.ComputedVars["result.trace_id"]; ok {
@@ -233,15 +321,7 @@ func protocolTraceDirs(tc *TestCase) []string {
 	var dirs []string
 	seen := map[string]bool{}
 	for _, r := range tc.TestStepResults {
-		// Interpolated holds the step after interpolation as YAML bytes (process_testcase.go)
-		raw, ok := r.Interpolated.([]byte)
-		if !ok {
-			continue
-		}
-		var m map[string]interface{}
-		if err := yaml.Unmarshal(raw, &m); err != nil {
-			continue
-		}
+		m := protocolStep(&r)
 		for _, k := range []string{"trace_dir", "traces"} {
 			d, ok := m[k].(string)
 			if ok && d != "" && !seen[d] {

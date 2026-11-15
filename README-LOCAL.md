@@ -115,15 +115,21 @@ skipped by `--stop-on-failure`. Sections:
 
 - `## Правильное поведение`: the `happens`, `expect`, `right` and `norm` info lines;
 - `## Что неправильно`: the `wrong` info lines;
+- `## Наличие данных`: one row per info line «данные есть: <сущность> · <ключ>» or «данных нет: <сущность> · <ключ>» (bare or
+  after `expect:`) of a precondition step, the read through the API that proves the data is there or is not: сущность ·
+  ключ · запрос (the `call:` line of that step, else its method and url, or url, service and method) · есть/нет with ✅
+  when the assertions of that read held and «❌ не подтверждено» when they did not · trace id · whether the tested call
+  sent the key's value, with its request, so a call that looked for something else shows. No such line: «предусловия
+  нет»;
 - `## Факт`: the `point` and `call` info lines, then the step, code (`statuscode` or `code`), message and body of the call —
   a step with a trace_id and a code, so trace_save and the check steps after the call are not taken —
   the last failed call, or the last call when none failed, and the `fact` info lines;
-  Before them, a step whose info carries `precondition: <entity> <key>=<value> есть|нет` (a read through the API that
-  proves the data is there, or is not) gives one row of the table `### Предусловие`: сущность · ключ · есть/нет · trace,
-  with ✅ when that read held and ❌ when it did not;
 - `## Трасса`: the span tree `<trace_dir>/<trace_id>.md` of that call, looked up in every `trace_dir` and `traces` the
   steps were given;
 - `## Вердикт`: ✅, ❌ with every failed assertion of every step, or ⏭ with the skip reason.
+
+The file name is the testcase name as written, row id first (`GW-B0005-…`, `S-001-…`), with spaces, `/`, `:` and the
+characters a file name cannot carry turned into `-`, at most 120 bytes; the testsuite folder is its slug.
 
 Info lines are `key: value` and come from the steps (`info:` of a step) and from the testcase itself: a testcase takes
 `info:` next to `name` and `steps` (`types.go`, `TestCaseInput.Info`).
@@ -136,7 +142,7 @@ Stock Venom has none of this. It has no testcase-level `info` key: `TestCaseInpu
 - no executor writes a file.
 The protocol is therefore written by the runner after the status of the testcase is known (`process_testsuite.go`,
 `runOneTestCase`). Point test: `protocol_test.go`, covering green, a failed Must, --stop-on-failure, and a failed Should
-with skipped vars, the template shape (a call with vars only, then a failing check step), and the precondition table.
+with skipped vars, the template shape (a call with vars only, then a failing check step), the presence table (data present, data absent, failed precondition, no precondition) and the file name.
 
 ## Build
 
