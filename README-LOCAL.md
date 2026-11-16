@@ -512,6 +512,58 @@ span). A bad regexp, or an `at` other than `start` or `end`, is a step error. De
 ShouldBeEmpty`; a step that lists its own assertions adds it itself, and adds `result.order_missing ShouldBeEmpty`
 when a scope with no span of an end is a failure. Point test: `executors/tempo/order_test.go`.
 
+## 26. User executors found up from the testsuite: no `--lib-dir` needed
+
+The user executor files are read from these `lib` directories, in this order: every `--lib-dir` entry, then for each
+testsuite every `lib` directory from its own directory up to the repository root (a directory holding `.git`) or the
+working directory, whichever comes first, nearest first, then `lib` of the working directory. A suite in
+`scenarios/billing/account/` finds the executors of `scenarios/lib/` (run 16-4: «user executor "trace_save" not found -
+loaded executors are: []»). A testsuite under neither the repository root nor the working directory gets only its own
+`lib`. A `lib` that is a symlink is resolved first, as `filepath.Walk` does not descend a symlinked root. Two executors of
+one name in two lib directories: the earlier one in this order wins (the nearer lib, or `--lib-dir`); two of one name in
+the same lib directory are still an error. Point tests: `TestUserExecutorLibFoundUpFromSuite`,
+`TestUserExecutorNearestLibWins`, `TestUserExecutorSymlinkedLib`, `TestUserExecutorLibStopsAtRepoRoot`.
+
+## 27. Credentials hidden in every output, declared secret or not
+
+The password of a URL with userinfo (`postgresql://postgres:__hidden__@pg-billing…`) and a JWT (`eyJ….….…` becomes
+`__hidden__`) are hidden with no `secrets:` declared: in the vars of the testsuite, of the testcases and of the steps
+(`inputVars`, `computedVars`), in the raw and interpolated steps, systemout, systemerr, info lines and failures, in
+`test_results_*.{json,xml,yml,tap}` and the html report, in the protocols, in `io.jsonl` and in `venom.log` (`log.go`,
+`maskCredentials`). A var with nothing to hide keeps its type. Run 16-4 carried the database DSN and the gateway tokens
+52 times in one result file. Point tests: `TestMaskCredentials`, `TestOutputMasksCredentialsWithNoSecret`.
+
+## 28. A log of every call: `<protocol-dir>/io.jsonl`
+
+With `--protocol-dir`, every call of every testcase — a step with `result.statuscode` or `result.code`, whatever its
+outcome — appends one JSON line to `<protocol-dir>/io.jsonl` (`protocol_io.go`): `testsuite`, `file`, `testcase`,
+`step` (1-based), `name`, `executor`, `call` (the call line of the protocol), `method`, `url`, `request_headers`
+(Authorization masked) and `request` (the body) of an http call, else `request` as the declared fields of the step,
+`code`, `trace_id`, `response_headers`, `response` (the body or systemout), `status`, `errors`, `start`, `duration_s`.
+Testcases and testsuites run in parallel write whole lines. Point test: `TestProtocolIOLines`.
+
+## 29. Every scenario file checked with no stand: `venom run --dry-run`
+
+`venom run --dry-run <files>` loads every testsuite as a run does and runs no step, so nothing touches the network:
+
+- the YAML is parsed; a file that does not parse fails as `<file>:<line>: error while unmarshal file: …`;
+- the user executors are loaded (section 26) and every step type of a testsuite and of a user executor file is resolved
+  to an executor; one that is not fails as `<file>:<line>: testcase "<name>" step N: user executor "<type>" not found …`
+  or `<file>:<line>: executor "<name>" step N: unknown executor "<type>"`;
+- every `{{.x}}` left in a step after the testsuite vars must be set by the testcase vars, by the `vars:` or `extracts:`
+  of an earlier step of the testcase, by an earlier testcase (`{{.<testcase>.<var>}}`), by venom (`{{.venom.…}}`) or by
+  `range:` (`index`, `key`, `value`); `{{.result.…}}` is allowed in the `vars:`, `info:` and `assertions:` of a step,
+  read after the step ran; an expression with `default`, `ternary` or `coalesce` is not checked. An unset one fails as
+  `<file>:<line>: testcase "<name>" step N: {{.x}} is set by no var …`, the line being the first from the step down that
+  reads it; an expression the testsuite vars printed as `<no value>` fails on the step line.
+
+The first failure is printed on stderr and the exit code is 2; a clean load prints `dry run: N testsuites, M
+testcases, K steps, U user executors loaded; every executor resolved, every var set` and exits 0. The vars of
+`--var`, `--var-from-file` and `VENOM_VAR_*` count as set. The step type and the YAML errors are named by
+`<file>:<line>` in a normal run too. Point tests: `TestDryRunGreen`, `TestDryRunUnsetVarNamedByLine`,
+`TestDryRunVarOfLaterStep`, `TestDryRunUnknownExecutorNamedByLine`, `TestDryRunUnknownExecutorInLib`,
+`TestDryRunUnparseableYAMLNamedByLine`.
+
 ## Build
 
 ```bash

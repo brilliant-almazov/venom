@@ -29,6 +29,7 @@ func (v *Venom) writeProtocol(ctx context.Context, ts *TestSuite, tc *TestCase) 
 	if v.ProtocolDir == "" {
 		return
 	}
+	v.writeProtocolIO(ctx, ts, tc)
 	dir := filepath.Join(v.ProtocolDir, slug.Make(ts.ShortName))
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		Error(ctx, "unable to create protocol dir %s: %v", dir, err)

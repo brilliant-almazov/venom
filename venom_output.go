@@ -49,6 +49,9 @@ func (v *Venom) CleanUpSecrets(testSuite TestSuite) TestSuite {
 			for k, info := range result.ComputedInfo {
 				result.ComputedInfo[k] = HideSensitive(ctx, info)
 			}
+			for k, failure := range result.Errors {
+				result.Errors[k].Value = HideSensitive(ctx, failure.Value)
+			}
 		}
 	}
 	return testSuite
@@ -112,7 +115,7 @@ func (v *Venom) OutputResult() error {
 
 		fname := strings.TrimSuffix(filepath.Base(ts.Filepath), filepath.Ext(ts.Filepath))
 		filename := filepath.Join(v.OutputDir, "test_results_"+fname+"."+v.OutputFormat)
-		if err := os.WriteFile(filename, data, 0o600); err != nil {
+		if err := os.WriteFile(filename, []byte(maskCredentials(string(data))), 0o600); err != nil {
 			return fmt.Errorf("Error while creating file %s: %v", filename, err)
 		}
 		v.PrintFunc("Writing file %s\n", filename)
@@ -136,7 +139,7 @@ func (v *Venom) OutputResult() error {
 		}
 		filename := filepath.Join(v.OutputDir, computeOutputFilename("test_results.html"))
 		v.PrintFunc("Writing html file %s\n", filename)
-		if err := os.WriteFile(filename, data, 0o600); err != nil {
+		if err := os.WriteFile(filename, []byte(maskCredentials(string(data))), 0o600); err != nil {
 			return errors.Wrapf(err, "Error while creating file %s", filename)
 		}
 	}
