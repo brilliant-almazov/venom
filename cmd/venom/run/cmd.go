@@ -57,7 +57,8 @@ func init() {
 	formatFlag = Cmd.Flags().String("format", "xml", "--format:json, tap, xml, yaml")
 	stopOnFailureFlag = Cmd.Flags().Bool("stop-on-failure", false, "Stop running Test Suite on first Test Case failure")
 	dryRunFlag = Cmd.Flags().Bool("dry-run", false, "Load every testsuite and run no step: parse the YAML, load the user executors, resolve every step type "+
-		"to an executor and check every {{.var}} of a step is set by the vars, an earlier step or an earlier testcase. "+
+		"to an executor and check every {{.var}} of a step is set by the vars, an earlier step or an earlier testcase, and that a testcase other than setup or teardown holds a call step "+
+		"with no Must... assertion before it. "+
 		"The first failure is printed as <file>:<line> and the exit code is 2; nothing touches the network")
 	parallelFlag = Cmd.Flags().Int("parallel", 1, "Run up to N testcases of one testsuite at once, 1 is sequential. "+
 		"A testsuite runs sequentially when --stop-on-failure is set or when a testcase references a var exported by an earlier testcase "+

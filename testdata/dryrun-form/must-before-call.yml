@@ -1,0 +1,14 @@
+name: must before the call
+testcases:
+- name: S-062 currency pair
+  steps:
+  - type: check
+    value: 'x'
+    assertions:
+    - result.value ShouldNotEqual ""
+  - type: check
+    value: 'x'
+    assertions:
+    - result.value MustNotEqual ""
+  - type: caller
+    code: 200

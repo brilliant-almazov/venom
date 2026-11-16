@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
@@ -15,7 +16,8 @@ import (
 
 // --dry-run loads every testsuite as a run does — YAML parsed, user executors loaded, every step type resolved to an
 // executor — and checks every {{.x}} left in a step after the testsuite vars: it must be set by the testcase vars, by
-// the vars or extracts of an earlier step, by an earlier testcase ({{.<testcase>.<var>}}) or by venom itself. No step
+// the vars or extracts of an earlier step, by an earlier testcase ({{.<testcase>.<var>}}) or by venom itself; every
+// testcase but setup and teardown holds a call step with no Must… before it (dryRunTestCaseForm). No step
 // runs and nothing touches the network. The first failure is named <file>:<line>.
 
 // dryRunExpression is a template action left in a step; dryRunVarRef a variable it reads, .name or .name.sub.
@@ -102,6 +104,60 @@ func dryRunRefs(val interface{}) []string {
 		}
 	}
 	return refs
+}
+
+// dryRunNoCall are the step types that call nothing: a step of any other type (http, grpc, sql, amqp, a user executor,
+// …) is a call. dryRunMust is a Must… assertion: a failed one stops the testcase.
+var (
+	dryRunNoCall = map[string]bool{"check": true, "wait": true, "trace_save": true}
+	dryRunMust   = regexp.MustCompile(`(?:^|\s)(Must[A-Z]\w*)`)
+)
+
+// dryRunTestCaseForm checks that a testcase cannot end with no call (run 16-6: 16 protocols «no trace: the testcase
+// has no call»): it holds a call step, and no step before the first call asserts Must…, a failed one would stop the
+// testcase before the call. A setup… or teardown… testcase and the files of scenarios/preflight are not checked.
+func dryRunTestCaseForm(ts *TestSuite, tc *TestCase) error {
+	name := strings.ToLower(tc.Name)
+	if strings.HasPrefix(name, "setup") || strings.HasPrefix(name, "teardown") ||
+		strings.Contains(filepath.ToSlash(ts.Filepath), "scenarios/preflight/") {
+		return nil
+	}
+	for i, raw := range tc.RawTestSteps {
+		var step map[string]interface{}
+		if err := json.Unmarshal(raw, &step); err != nil {
+			return dryRunErr(ts, tc, i, "", fmt.Sprintf("step does not parse: %v", err))
+		}
+		if typ, _ := step["type"].(string); !dryRunNoCall[typ] {
+			return nil
+		}
+		if must := dryRunMustOf(step["assertions"]); must != "" {
+			return errors.Errorf("%s:%d: testcase %q: step %d asserts %s before the first call",
+				ts.Filepath, dryRunLine(ts.Filepath, tc, i, ""), tc.Name, i+1, must)
+		}
+	}
+	return errors.Errorf("%s:%d: testcase %q: testcase has no call step", ts.Filepath, tc.SourceLine, tc.Name)
+}
+
+// dryRunMustOf is the first Must… operator of the assertions of a step, "" when there is none.
+func dryRunMustOf(assertions interface{}) string {
+	list, ok := assertions.([]interface{})
+	if !ok {
+		return ""
+	}
+	for _, a := range list {
+		text, ok := a.(string)
+		if !ok {
+			raw, err := json.Marshal(a)
+			if err != nil {
+				continue
+			}
+			text = string(raw)
+		}
+		if m := dryRunMust.FindStringSubmatch(text); m != nil {
+			return m[1]
+		}
+	}
+	return ""
 }
 
 func dryRunHasDefault(expr string) bool {

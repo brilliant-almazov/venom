@@ -255,6 +255,9 @@ func (v *Venom) parseTestCases(ts *TestSuite) ([]string, []string, error) {
 	for i := range ts.TestCases {
 		tc := &ts.TestCases[i]
 		if v.DryRun {
+			if err := dryRunTestCaseForm(ts, tc); err != nil {
+				return nil, nil, err
+			}
 			if err := dryRunTestCase(ts, tc, earlier); err != nil {
 				return nil, nil, err
 			}

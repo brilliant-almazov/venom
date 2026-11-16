@@ -207,6 +207,48 @@ func TestDryRunUnparseableYAMLNamedByLine(t *testing.T) {
 	assert.Regexp(t, `suite\.yml:\d+: error while unmarshal file`, err.Error())
 }
 
+// dryRunForm dry-runs a file of testdata/dryrun-form put in dir, the check and wait steps run by the call stub.
+func dryRunForm(t *testing.T, dir, name string) error {
+	t.Helper()
+	body, err := os.ReadFile(filepath.Join("testdata", "dryrun-form", name))
+	require.NoError(t, err)
+	root := t.TempDir()
+	writeTree(t, root, map[string]string{
+		".git/HEAD":                    "ref: refs/heads/master\n",
+		"scenarios/lib/trace_save.yml": libSave,
+		dir + "/" + name:               string(body),
+	})
+	v := newTestVenom(t)
+	v.RegisterExecutorBuiltin("check", callExecutor{})
+	v.RegisterExecutorBuiltin("wait", callExecutor{})
+	v.DryRun = true
+	return v.Parse(context.Background(), []string{filepath.Join(root, dir, name)})
+}
+
+// A testcase of check and wait steps only ends with no call (run 16-6: «no trace: the testcase has no call»).
+func TestDryRunTestCaseWithNoCall(t *testing.T) {
+	err := dryRunForm(t, "scenarios/billing", "no-call.yml")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `no-call.yml:3: testcase "S-049 snapshot of the condition": testcase has no call step`)
+}
+
+// A failed Must… before the first call stops the testcase before the call (run 16-6, S-062…S-066).
+func TestDryRunMustBeforeCall(t *testing.T) {
+	err := dryRunForm(t, "scenarios/billing", "must-before-call.yml")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `must-before-call.yml:9: testcase "S-062 currency pair": step 2 asserts MustNotEqual before the first call`)
+}
+
+// A call, trace_save and then Must… is green; a setup or teardown testcase is not checked, whatever its case.
+func TestDryRunCallThenMustGreen(t *testing.T) {
+	require.NoError(t, dryRunForm(t, "scenarios/billing", "green.yml"))
+}
+
+// The files of scenarios/preflight are not checked.
+func TestDryRunPreflightNotChecked(t *testing.T) {
+	require.NoError(t, dryRunForm(t, "scenarios/preflight", "no-call.yml"))
+}
+
 func TestMaskCredentials(t *testing.T) {
 	jwt := "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.c2lnbmF0dXJl"
 	in := "dsn postgresql://postgres:s3cr3t@pg-billing:5432/billing?sslmode=disable token Bearer " + jwt

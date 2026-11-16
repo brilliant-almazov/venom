@@ -564,6 +564,25 @@ testcases, K steps, U user executors loaded; every executor resolved, every var 
 `TestDryRunVarOfLaterStep`, `TestDryRunUnknownExecutorNamedByLine`, `TestDryRunUnknownExecutorInLib`,
 `TestDryRunUnparseableYAMLNamedByLine`.
 
+## 30. A testcase that can end with no call fails the dry run
+
+Stock executors checked: none apply - this is a dry-run form check, not an executor.
+
+Run 16-6 wrote 16 protocols with «no trace: the testcase has no call»: the testcase opened with `type: check` steps
+asserting `Must…` on the inputs of its setup, a failed `Must…` stopped it before the call. `venom run --dry-run` now
+checks the form of every testcase on the parsed YAML, before the templates are filled:
+
+- the testcase holds a call step: a step whose `type` is not `check`, `wait` or `trace_save` (http, grpc, sql, amqp,
+  rabbitmq, tempo, s3, a user executor, …); a testcase with none fails as
+  `<file>:<line>: testcase "<name>": testcase has no call step`, the line of the testcase;
+- no step before the first call asserts `Must…` in its `assertions:`; one that does fails as
+  `<file>:<line>: testcase "<name>": step N asserts <MustOperator> before the first call`, the line of the step.
+
+A testcase whose name starts with `setup` or `teardown` (any case) and every file under `scenarios/preflight/` are not
+checked. A failure exits 2 as every dry run failure. Point tests: `TestDryRunTestCaseWithNoCall`,
+`TestDryRunMustBeforeCall`, `TestDryRunCallThenMustGreen`, `TestDryRunPreflightNotChecked`, files of
+`testdata/dryrun-form/`.
+
 ## Build
 
 ```bash
