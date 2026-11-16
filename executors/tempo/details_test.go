@@ -1,8 +1,11 @@
 package tempo
 
 import (
+	"os"
 	"strings"
 	"testing"
+
+	"github.com/ovh/venom/internal/golden"
 )
 
 const detailTrace = `{"batches":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"svc-a"}}]},
@@ -58,4 +61,12 @@ func TestSQLLinesWrap(t *testing.T) {
 	if len(lines) != 3 || len([]rune(lines[0])) > sqlWidth || lines[2] != "FROM t" {
 		t.Fatalf("%q", lines)
 	}
+}
+
+func TestRenderExample(t *testing.T) {
+	body, err := os.ReadFile("testdata/render_example.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.Text(t, "render_example", Render("4bf92f3577b34da6a3ce929d0e0e4736", "4bf92f3577b34da6a3ce929d0e0e4736.json", body))
 }

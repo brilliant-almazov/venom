@@ -207,6 +207,66 @@ message, every `exception.message`, and `<key>=<value>` of `fault.reason` and ev
 this file under Trace and the trace gate fails a call whose tree is missing. Result: `result.trace_id`,
 `result.trace_saved` (`yes`, `late`, `no`), `result.trace_file`, `result.tree_file`, `result.spans`, `result.mismatch`.
 
+The tree of `executors/tempo/testdata/render_example.json` (golden test `TestRenderExample`):
+
+````markdown
+### Trace `4bf92f3577b34da6a3ce929d0e0e4736`
+
+| trace_id | root | duration, ms | spans | ❌ | source |
+| -- | -- | -- | -- | -- | -- |
+| `4bf92f3577b34da6a3ce929d0e0e4736` | svc-edge · POST /v1/items | 42.37 | 8 | 3 | `4bf92f3577b34da6a3ce929d0e0e4736.json` |
+
+summary: ✅ 5 spans · ❌ 3 spans · first problem: svc-edge POST /v1/items — OTLP ERROR · http 422 · item kind is not known · edge.error.reason=unknown_kind
+
+```text
+└─ svc-edge · POST /v1/items · 42.37 ms · ❌
+   │  problem: OTLP ERROR · http 422 · item kind is not known · edge.error.reason=unknown_kind
+   │  edge.error.reason: unknown_kind
+   │  http.request.method: POST
+   │  http.response.status_code: 422
+   │  http.route: /v1/items
+   ├─ svc-edge · auth.check · 0.25 ms · ✅
+   │     auth.result: authenticated
+   │     cache.hit: False
+   └─ svc-store · store.v1.ItemService/Create · 38.6 ms · ❌
+      │  problem: grpc INVALID_ARGUMENT · fault.reason=unknown_kind
+      │  fault.domain: store.item
+      │  fault.reason: unknown_kind
+      │  rpc.method: store.v1.ItemService/Create
+      │  rpc.response.status_code: INVALID_ARGUMENT
+      │  event: rpc.payload.received
+      │     rpc.request.body_size: 26
+      ├─ svc-store · tx main · 37.6 ms · ❌
+      │  │  problem: OTLP ERROR · unknown_kind
+      │  │  event: exception
+      │  │     exception.message: unknown_kind
+      │  │     exception.type: *fault.Fault
+      │  ├─ svc-store · query · 1.7 ms · ✅
+      │  │     db.rows_affected: 0
+      │  │     db.system.name: postgresql
+      │  │     SQL: begin
+      │  ├─ svc-store · query · 28.3 ms · ✅
+      │  │     db.query.text.arg.1: widget
+      │  │     db.query.text.arg.2: 1
+      │  │     db.rows_affected: 0
+      │  │     db.system.name: postgresql
+      │  │     SQL: SELECT k.id, k.name
+      │  │          FROM catalog.kinds k
+      │  │          WHERE k.code = $1
+      │  │          AND k.active
+      │  │          ORDER BY k.id DESC
+      │  │          LIMIT $2
+      │  └─ svc-store · get · 0.4 ms · ✅
+      │        db.system: redis
+      │        server.address: cache.local
+      │        SQL: get kind:widget
+      └─ svc-store · query · 0.2 ms · ✅
+            db.rows_affected: 0
+            db.system.name: postgresql
+            SQL: rollback
+```
+````
+
 The `tempo` step checks the saved trace with no shell: `contains`, `not_contains` (lists of substrings) and `matches`
 (list of Go regexps) are matched over one line per span, `<service> · <span> · <status> · <key>=<value> · …`
 (status `✅` or `❌ <message>`, attributes sorted by key). Each `contains` item must be in some span line, no
