@@ -114,9 +114,11 @@ hashids and the operation_id of a write, keyed on the trace of the call just bef
 
 ## 10. A protocol per testcase: `--protocol-dir`
 
-`--protocol-dir <dir>` (env `VENOM_PROTOCOL_DIR`, `.venomrc` key `protocol_dir`) writes `<dir>/<testsuite>/<testcase>.md`
+`--protocol-dir <dir>` (env `VENOM_PROTOCOL_DIR`, `.venomrc` key `protocol_dir`) writes `<dir>/<testsuite>/<testcase>--<outcome>.md`
 for every testcase, whatever its outcome: passed, failed on a `Should…` assertion, failed on a `Must…` assertion, or
-skipped by `--stop-on-failure`. Sections:
+skipped by `--stop-on-failure`. The outcome in the file name is `ok` for a passed testcase, `partial` for a failed one
+where some of its assertions held, `failed` for a failed one where none held; a skipped testcase has no outcome in the
+name, `<testcase>.md` (`protocol_outcome.go`). Sections:
 
 - `## Expected behaviour`: the `happens`, `expect`, `right` and `norm` info lines;
 - `## What is wrong`: the `wrong` info lines;
@@ -135,7 +137,8 @@ skipped by `--stop-on-failure`. Sections:
   X-Trace-Id, Traceparent, X-Request-Id and X-Build headers and the body verbatim, and the `fact` info lines;
 - `## State after`: every later call of the testcase, the read-back after a write, with its request and answer;
 - `## Trace`: the span tree `<trace_dir>/<trace_id>.md` of that call, looked up in every `trace_dir` and `traces` the
-  steps were given;
+  steps were given; when that call returned no trace id, the tree of every other step with a trace id and a code, under
+  `- step: N "<name>"` (a teardown whose stand step failed after its calls);
 - `## Verdict`: ✅, ❌ with every failed assertion of every step, or ⏭ with the skip reason.
 
 A testcase whose call returned a trace id while no tree `<dir>/<trace_id>.md` was saved fails (`traceGate`). The fork is
@@ -191,7 +194,14 @@ trace_id. Point test: `executors/cli/cli_test.go`.
 
 The `tempo` executor (`trace_id`, `tempo_url`, `trace_dir`, `wait` seconds, default 20) and the traced http and grpc
 calls save `<trace_dir>/<trace_id>.json` and, next to it, the span tree `<trace_dir>/<trace_id>.md`: one span per line
-under its parent, `- <service> · <span> · <ms> ms · ✅`, `❌ <status message>` on an error status. The protocol prints
+under its parent, `- <service> · <span> · <ms> ms · ✅`, `❌ <status message>` on an error status, `❌ <fault.reason>` or
+`❌ <code>` on a span with no error status that carries `fault.*` or answered `rpc.response.status_code` other than `OK`,
+`rpc.grpc.status_code` other than `0`, `http.response.status_code` or `http.status_code` of 400 and up. Under each span,
+before its children, its details one per line `- <key>: <value>`: the answer code that is not a success, every
+`fault.*`; for a database or cache span (`db.system.name` or `db.system`) the system, `db.namespace`,
+`db.operation.name`, `server.address:server.port`, the query `db.query.text` (or `db.statement`) whole as one code span,
+its arguments `db.query.text.arg.N` in the order of N, `db.rows_affected`; every `messaging.*` of a bus span; every
+event `- event <name>: <key>=<value>, …` (`rpc.payload.received`, `rpc.payload.sent`, `exception`). The protocol prints
 this file under Trace and the trace gate fails a call whose tree is missing. Result: `result.trace_id`,
 `result.trace_saved` (`yes`, `late`, `no`), `result.trace_file`, `result.tree_file`, `result.spans`, `result.mismatch`.
 

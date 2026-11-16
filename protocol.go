@@ -20,7 +20,7 @@ const protocolBodyMax = 20000
 // protocolInfoLine reads an info line "key: value"; the " (file:line)" suffix Venom adds to step info is dropped.
 var protocolInfoLine = regexp.MustCompile(`^\s*([a-z_]+)\s*:\s*(.*?)(?:\s+\([^()]+:\d+\))?\s*$`)
 
-// writeProtocol writes <ProtocolDir>/<testsuite>/<testcase>.md for one testcase, whatever its outcome: the expected and
+// writeProtocol writes <ProtocolDir>/<testsuite>/<testcase>--<outcome>.md (protocolFile) for one testcase, whatever its outcome: the expected and
 // the wrong behaviour from the info lines of the testcase and its steps, the result of its last call, the span tree of
 // that call and the verdict with every failed assertion. Stock Venom keeps none of it in a file per testcase: a step
 // after a failed Must assertion or under --stop-on-failure never runs, and a failed step sets none of its vars, so a
@@ -34,7 +34,7 @@ func (v *Venom) writeProtocol(ctx context.Context, ts *TestSuite, tc *TestCase) 
 		Error(ctx, "unable to create protocol dir %s: %v", dir, err)
 		return
 	}
-	file := filepath.Join(dir, protocolFileName(tc.Name)+".md")
+	file := filepath.Join(dir, protocolFile(tc))
 	if err := os.WriteFile(file, []byte(HideSensitive(ctx, protocolText(ts, tc))), 0o644); err != nil {
 		Error(ctx, "unable to write protocol %s: %v", file, err)
 	}
@@ -392,8 +392,28 @@ func protocolTrace(tc *TestCase, call *TestStepResult) string {
 	}
 	id := protocolTraceID(call)
 	if id == "" {
-		return "- " + protocolNoTrace + ": the call returned no trace_id in its result, the X-Trace-Id header or meta.trace_id of the body\n"
+		return protocolStepTraces(tc)
 	}
+	return protocolTree(tc, id)
+}
+
+// protocolStepTraces prints, for a call that returned no trace id, the span tree of every other step of the testcase that
+// did, under "- step N": a teardown whose stand step failed after its calls each returned a trace (run 16-2: 9 protocols
+// with a trace id and no tree).
+func protocolStepTraces(tc *TestCase) string {
+	var b strings.Builder
+	b.WriteString("- " + protocolNoTrace + ": the call returned no trace_id in its result, the X-Trace-Id header or meta.trace_id of the body\n")
+	for i := range tc.TestStepResults {
+		r := &tc.TestStepResults[i]
+		if id := protocolTraceID(r); id != "" && protocolHasCode(r) {
+			fmt.Fprintf(&b, "\n"+protocolStepLine+"\n%s", i+1, r.Name, protocolTree(tc, id))
+		}
+	}
+	return b.String()
+}
+
+// protocolTree prints the span tree <trace_dir>/<id>.md, or why there is none.
+func protocolTree(tc *TestCase, id string) string {
 	f, tried := protocolTreeFile(tc, id)
 	if f != "" {
 		btes, err := os.ReadFile(f)

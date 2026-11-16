@@ -51,6 +51,7 @@ type renderSpan struct {
 	Start        json.RawMessage `json:"startTimeUnixNano"`
 	End          json.RawMessage `json:"endTimeUnixNano"`
 	Attributes   []renderAttr    `json:"attributes"`
+	Events       []renderEvent   `json:"events"`
 	Status       struct {
 		Code    json.RawMessage `json:"code"`
 		Message string          `json:"message"`
@@ -89,8 +90,9 @@ func readSpans(body []byte) []renderSpan {
 }
 
 // Render prints the span tree of a Tempo trace as Markdown, one span per line under its parent, in start order:
-// "- <service> · <span> · <ms> ms · ✅" and "❌ <status message>" for a span with an error status. A span whose parent
-// is not in the trace is a root.
+// "- <service> · <span> · <ms> ms · ✅", "❌ <status message>" for a span with an error status and "❌ <fault.reason or
+// answer code>" for a span that answered a failure (renderStatus); under the span, before its children, its details
+// "- <key>: <value>" (details). A span whose parent is not in the trace is a root.
 func Render(body []byte) string {
 	spans := readSpans(body)
 	ids := map[string]bool{}
@@ -110,7 +112,10 @@ func Render(body []byte) string {
 	walk = func(parent string, depth int) {
 		for _, s := range children[parent] {
 			fmt.Fprintf(&b, "%s- %s · %s · %s ms · %s\n", strings.Repeat("  ", depth), s.service, s.Name,
-				strconv.FormatFloat(float64(nanos(s.End)-nanos(s.Start))/1e6, 'f', 1, 64), status(s))
+				strconv.FormatFloat(float64(nanos(s.End)-nanos(s.Start))/1e6, 'f', 1, 64), renderStatus(s))
+			for _, d := range details(s) {
+				fmt.Fprintf(&b, "%s  - %s\n", strings.Repeat("  ", depth), d)
+			}
 			if s.SpanID != "" {
 				walk(s.SpanID, depth+1)
 			}
