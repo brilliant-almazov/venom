@@ -214,56 +214,55 @@ The tree of `executors/tempo/testdata/render_example.json` (golden test `TestRen
 
 | trace_id | root | duration, ms | spans | ❌ | source |
 | -- | -- | -- | -- | -- | -- |
-| `4bf92f3577b34da6a3ce929d0e0e4736` | svc-edge · POST /v1/items | 42.37 | 8 | 3 | `4bf92f3577b34da6a3ce929d0e0e4736.json` |
+| `4bf92f3577b34da6a3ce929d0e0e4736` | svc-edge · POST /v1/items | 42.37 | 8 | 4 | `4bf92f3577b34da6a3ce929d0e0e4736.json` |
 
-summary: ✅ 5 spans · ❌ 3 spans · first problem: svc-edge POST /v1/items — OTLP ERROR · http 422 · item kind is not known · edge.error.reason=unknown_kind
+summary: ✅ 4 spans · ❌ 4 spans · first problem: svc-edge POST /v1/items — OTLP ERROR · http 409 · item already exists · edge.error.reason=already_exists
 
 ```text
 └─ svc-edge · POST /v1/items · 42.37 ms · ❌
-   │  problem: OTLP ERROR · http 422 · item kind is not known · edge.error.reason=unknown_kind
-   │  edge.error.reason: unknown_kind
+   │  problem: OTLP ERROR · http 409 · item already exists · edge.error.reason=already_exists
+   │  edge.error.reason: already_exists
    │  http.request.method: POST
-   │  http.response.status_code: 422
+   │  http.response.status_code: 409
    │  http.route: /v1/items
    ├─ svc-edge · auth.check · 0.25 ms · ✅
    │     auth.result: authenticated
    │     cache.hit: False
    └─ svc-store · store.v1.ItemService/Create · 38.6 ms · ❌
-      │  problem: grpc INVALID_ARGUMENT · fault.reason=unknown_kind
+      │  problem: grpc ALREADY_EXISTS · fault.reason=already_exists
       │  fault.domain: store.item
-      │  fault.reason: unknown_kind
+      │  fault.reason: already_exists
       │  rpc.method: store.v1.ItemService/Create
-      │  rpc.response.status_code: INVALID_ARGUMENT
+      │  rpc.response.status_code: ALREADY_EXISTS
       │  event: rpc.payload.received
       │     rpc.request.body_size: 26
-      ├─ svc-store · tx main · 37.6 ms · ❌
-      │  │  problem: OTLP ERROR · unknown_kind
-      │  │  event: exception
-      │  │     exception.message: unknown_kind
-      │  │     exception.type: *fault.Fault
-      │  ├─ svc-store · query · 1.7 ms · ✅
-      │  │     db.rows_affected: 0
-      │  │     db.system.name: postgresql
-      │  │     SQL: begin
-      │  ├─ svc-store · query · 28.3 ms · ✅
-      │  │     db.query.text.arg.1: widget
-      │  │     db.query.text.arg.2: 1
-      │  │     db.rows_affected: 0
-      │  │     db.system.name: postgresql
-      │  │     SQL: SELECT k.id, k.name
-      │  │          FROM catalog.kinds k
-      │  │          WHERE k.code = $1
-      │  │          AND k.active
-      │  │          ORDER BY k.id DESC
-      │  │          LIMIT $2
-      │  └─ svc-store · get · 0.4 ms · ✅
-      │        db.system: redis
-      │        server.address: cache.local
-      │        SQL: get kind:widget
-      └─ svc-store · query · 0.2 ms · ✅
-            db.rows_affected: 0
-            db.system.name: postgresql
-            SQL: rollback
+      ├─ svc-store · get · 0.4 ms · ✅
+      │     db.system: redis
+      │     server.address: cache.local
+      │     SQL: get kind:widget
+      └─ svc-store · tx main · 37.7 ms · ❌
+         │  problem: OTLP ERROR · already_exists
+         │  event: exception
+         │     exception.message: already_exists
+         │     exception.type: *fault.Fault
+         ├─ svc-store · query · 1.7 ms · ✅
+         │     db.rows_affected: 0
+         │     db.system.name: postgresql
+         │     SQL: begin
+         ├─ svc-store · query · 35.3 ms · ❌
+         │     problem: OTLP ERROR · duplicate key value violates unique constraint "items_code_key"
+         │     db.query.text.arg.1: 1001
+         │     db.query.text.arg.2: 7
+         │     db.query.text.arg.3: widget-1
+         │     db.query.text.arg.4: 2026-01-01 00:00:00 +0000 UTC
+         │     db.rows_affected: 0
+         │     db.system.name: postgresql
+         │     SQL: INSERT INTO catalog.items (id, kind_id, code, created_at)
+         │          VALUES ($1, $2, $3, $4)
+         └─ svc-store · query · 0.2 ms · ✅
+               db.rows_affected: 0
+               db.system.name: postgresql
+               SQL: rollback
 ```
 ````
 
