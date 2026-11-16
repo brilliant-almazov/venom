@@ -1,7 +1,5 @@
 package venom
 
-// The outcome a protocol file name ends with, after protocolOutcomeSep: the reader sees the result of the run in the
-// list of files (owner 2026-11-16: «где статус в название файла? ok, failed. partial»).
 const (
 	protocolOutcomeSep     = "--"
 	protocolOutcomeOK      = "ok"
@@ -9,8 +7,6 @@ const (
 	protocolOutcomePartial = "partial"
 )
 
-// protocolOutcome is the outcome of a testcase for its file name: ok when it passed, partial when it failed while some
-// of its assertions held, failed when it failed and none held; empty for a skipped testcase.
 func protocolOutcome(tc *TestCase) string {
 	switch tc.Status {
 	case StatusPass:
@@ -28,7 +24,6 @@ func protocolOutcome(tc *TestCase) string {
 	return ""
 }
 
-// protocolFile is the file name of the protocol of a testcase: protocolFileName, then the outcome when there is one.
 func protocolFile(tc *TestCase) string {
 	name := protocolFileName(tc.Name)
 	if o := protocolOutcome(tc); o != "" {

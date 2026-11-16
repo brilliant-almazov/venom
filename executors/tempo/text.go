@@ -1,38 +1,65 @@
 package tempo
 
 import (
-	"sort"
+	"math"
+	"regexp"
+	"strconv"
 	"strings"
 )
 
-// prefixed are "<key>: <value>" of the attributes of a span whose key starts with prefix, sorted by key.
-func prefixed(s renderSpan, prefix string) []string {
+const sqlWidth = 150
+
+var sqlClause = regexp.MustCompile(`\s+(FROM|WHERE|ORDER BY|GROUP BY|LIMIT|AND|OR|VALUES|JOIN|SET)\b`)
+
+func sqlLines(q string) []string {
+	q = strings.Join(strings.Fields(q), " ")
 	var lines []string
-	for _, a := range s.Attributes {
-		if strings.HasPrefix(a.Key, prefix) {
-			lines = append(lines, a.Key+": "+a.text())
+	for _, clause := range strings.Split(sqlClause.ReplaceAllString(q, "\n$1"), "\n") {
+		line := ""
+		for _, w := range strings.Fields(clause) {
+			if line != "" && len([]rune(line))+1+len([]rune(w)) > sqlWidth {
+				lines = append(lines, line)
+				line = ""
+			}
+			if line != "" {
+				line += " "
+			}
+			line += w
 		}
+		lines = append(lines, line)
 	}
-	sort.Strings(lines)
 	return lines
 }
 
-// codeSpan is v as one Markdown code span, its line breaks kept as spaces, fenced by more backticks than any run in v.
-func codeSpan(v string) string {
-	v = strings.Join(strings.Fields(v), " ")
-	fence, run := "`", 0
-	for _, r := range v {
-		if r == '`' {
-			run++
-			if run >= len(fence) {
-				fence += "`"
-			}
-		} else {
-			run = 0
+func (v renderValue) pyText() string {
+	switch {
+	case v.BoolValue != nil:
+		if *v.BoolValue {
+			return "True"
 		}
+		return "False"
+	case v.ArrayValue != nil:
+		items := make([]string, 0, len(v.ArrayValue.Values))
+		for _, i := range v.ArrayValue.Values {
+			items = append(items, i.pyText())
+		}
+		return "[" + strings.Join(items, ", ") + "]"
 	}
-	if strings.HasPrefix(v, "`") || strings.HasSuffix(v, "`") {
-		v = " " + v + " "
+	return v.text()
+}
+
+func pyFloat(f float64) string {
+	if a := math.Abs(f); a != 0 && (a < 1e-4 || a >= 1e16) {
+		return strconv.FormatFloat(f, 'e', -1, 64)
 	}
-	return fence + v + fence
+	s := strconv.FormatFloat(f, 'f', -1, 64)
+	if !strings.Contains(s, ".") {
+		s += ".0"
+	}
+	return s
+}
+
+func ms(start, end int64) string {
+	f, _ := strconv.ParseFloat(strconv.FormatFloat(float64(end-start)/1e6, 'f', 2, 64), 64)
+	return pyFloat(f)
 }

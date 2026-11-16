@@ -1,24 +1,10 @@
 package tempo
 
-import "strconv"
+import (
+	"strconv"
+	"strings"
+)
 
-// answerCodes are the attributes a span carries the code of its answer under, with the codes that mean success.
-var answerCodes = []struct {
-	key string
-	ok  func(string) bool
-}{
-	{"rpc.response.status_code", func(v string) bool { return v == "" || v == "OK" || v == "0" }},
-	{"rpc.grpc.status_code", func(v string) bool { return v == "" || v == "0" }},
-	{"http.response.status_code", httpOK},
-	{"http.status_code", httpOK},
-}
-
-func httpOK(v string) bool {
-	n, err := strconv.Atoi(v)
-	return err != nil || n < 400
-}
-
-// attr is the value of the attribute key of a span and whether the span has it.
 func (s renderSpan) attr(key string) (string, bool) {
 	for _, a := range s.Attributes {
 		if a.Key == key {
@@ -28,32 +14,58 @@ func (s renderSpan) attr(key string) (string, bool) {
 	return "", false
 }
 
-// failure is what makes a span failed beyond its status: its fault.reason, else its answer code that is not a success,
-// else its first fault.* as "<key>: <value>";
-// empty for a span that carries neither.
-func (s renderSpan) failure() string {
-	if r, ok := s.attr("fault.reason"); ok && r != "" {
-		return r
+func problem(s renderSpan) string {
+	var parts []string
+	if status(s) != "✅" {
+		parts = append(parts, "OTLP ERROR")
 	}
-	for _, c := range answerCodes {
-		if v, ok := s.attr(c.key); ok && !c.ok(v) {
-			return v
+	for _, k := range []string{"http.response.status_code", "http.status_code"} {
+		if v, ok := s.attr(k); ok {
+			if n, err := strconv.Atoi(v); err == nil && n >= 400 {
+				parts = append(parts, "http "+v)
+				break
+			}
 		}
 	}
-	if f := prefixed(s, "fault."); len(f) > 0 {
-		return f[0]
+	if v, ok := s.attr("rpc.response.status_code"); ok && v != "" && v != "OK" && v != "0" {
+		parts = append(parts, "grpc "+v)
 	}
-	return ""
+	if len(parts) == 0 && len(messages(s)) == 1 {
+		return ""
+	}
+	seen := map[string]bool{}
+	for _, m := range messages(s) {
+		if strings.TrimSpace(m) != "" && !seen[m] {
+			seen[m] = true
+			parts = append(parts, m)
+		}
+	}
+	for _, a := range sortedByKey(s.Attributes) {
+		if (a.Key == "fault.reason" || strings.Contains(a.Key, ".error.") && strings.HasSuffix(a.Key, "reason")) && a.text() != "none" {
+			parts = append(parts, a.Key+"="+a.text())
+		}
+	}
+	return strings.Join(parts, " · ")
 }
 
-// renderStatus is the status Render prints: status (✅, or ❌ with the message of an error status), and ❌ with the
-// failure for a span whose answer code is not a success or that carries a fault.* attribute.
-func renderStatus(s renderSpan) string {
-	if st := status(s); st != "✅" {
-		return st
-	}
-	if f := s.failure(); f != "" {
-		return "❌ " + f
+func mark(s renderSpan) string {
+	if problem(s) != "" {
+		return "❌"
 	}
 	return "✅"
+}
+
+func messages(s renderSpan) []string {
+	out := []string{s.Status.Message}
+	for _, e := range s.Events {
+		if e.Name != "exception" {
+			continue
+		}
+		for _, a := range e.Attributes {
+			if a.Key == "exception.message" {
+				out = append(out, a.text())
+			}
+		}
+	}
+	return out
 }

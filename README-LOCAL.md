@@ -193,15 +193,17 @@ trace_id. Point test: `executors/cli/cli_test.go`.
 ## 13. The span tree of a saved trace: `tempo` writes `<trace_id>.md`
 
 The `tempo` executor (`trace_id`, `tempo_url`, `trace_dir`, `wait` seconds, default 20) and the traced http and grpc
-calls save `<trace_dir>/<trace_id>.json` and, next to it, the span tree `<trace_dir>/<trace_id>.md`: one span per line
-under its parent, `- <service> · <span> · <ms> ms · ✅`, `❌ <status message>` on an error status, `❌ <fault.reason>` or
-`❌ <code>` on a span with no error status that carries `fault.*` or answered `rpc.response.status_code` other than `OK`,
-`rpc.grpc.status_code` other than `0`, `http.response.status_code` or `http.status_code` of 400 and up. Under each span,
-before its children, its details one per line `- <key>: <value>`: the answer code that is not a success, every
-`fault.*`; for a database or cache span (`db.system.name` or `db.system`) the system, `db.namespace`,
-`db.operation.name`, `server.address:server.port`, the query `db.query.text` (or `db.statement`) whole as one code span,
-its arguments `db.query.text.arg.N` in the order of N, `db.rows_affected`; every `messaging.*` of a bus span; every
-event `- event <name>: <key>=<value>, …` (`rpc.payload.received`, `rpc.payload.sent`, `exception`). The protocol prints
+calls save `<trace_dir>/<trace_id>.json` and, next to it, the span tree `<trace_dir>/<trace_id>.md` (`tree_md.go`):
+the heading ``### Trace `<id>` ``, a table `trace_id | root | duration, ms | spans | ❌ | source`, the line
+`summary: ✅ N spans · ❌ M spans · first problem: <service> <span> — <problem>` (or `no problems`), and the tree in a
+`text` block, `├─`/`└─` under the parent in start order, each span `<service> · <span> · <ms> ms · ✅|❌`. Under each
+span: `problem: …` when it has one, every attribute `<key>: <value>` sorted by key, every event `event: <name>` with its
+attributes, and the query `db.query.text` as `SQL: …`, one clause per line (FROM, WHERE, AND, OR, JOIN, VALUES, SET,
+GROUP BY, ORDER BY, LIMIT) wrapped at 150 characters, or `SQL: same SQL as the span above` for a query already printed.
+A span has a problem with an error status (`OTLP ERROR`), `http.response.status_code` of 400 and up (`http <code>`),
+`rpc.response.status_code` other than `OK` (`grpc <code>`), or an `exception` event; the problem adds the status
+message, every `exception.message`, and `<key>=<value>` of `fault.reason` and every `*.error.*reason` that is not
+`none`. The protocol prints
 this file under Trace and the trace gate fails a call whose tree is missing. Result: `result.trace_id`,
 `result.trace_saved` (`yes`, `late`, `no`), `result.trace_file`, `result.tree_file`, `result.spans`, `result.mismatch`.
 
