@@ -251,8 +251,15 @@ func (v *Venom) parseTestSuite(ts *TestSuite) ([]string, []string, error) {
 func (v *Venom) parseTestCases(ts *TestSuite) ([]string, []string, error) {
 	var vars []string
 	var extractsVars []string
+	var earlier []string
 	for i := range ts.TestCases {
 		tc := &ts.TestCases[i]
+		if v.DryRun {
+			if err := dryRunTestCase(ts, tc, earlier); err != nil {
+				return nil, nil, err
+			}
+			earlier = append(earlier, tc.Name, slug.Make(tc.Name))
+		}
 		tc.originalName = tc.Name
 		tc.number = i + 1
 		tc.Name = slug.Make(tc.Name)

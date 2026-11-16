@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 	"testing"
@@ -42,17 +43,31 @@ func asJsonString(i interface{}) string {
 	return string(btes)
 }
 
-// HideSensitive replace the value with __hidden__
+// HideSensitive replace the value with __hidden__: every declared secret, then every credential (maskCredentials).
 func HideSensitive(ctx context.Context, arg interface{}) string {
-	secrets, ok := ctx.Value(ContextKey("secrets")).([]string)
-	if !ok || len(secrets) == 0 {
-		if str, ok := arg.(string); ok {
-			return str
-		}
-		return fmt.Sprint(arg)
+	s, ok := arg.(string)
+	if !ok {
+		s = fmt.Sprint(arg)
 	}
+	if secrets, ok := ctx.Value(ContextKey("secrets")).([]string); ok && len(secrets) > 0 {
+		s = replaceSecrets(s, secrets)
+	}
+	return maskCredentials(s)
+}
 
-	return replaceSecrets(fmt.Sprint(arg), secrets)
+// credentialURL is a URL with a password in its userinfo, scheme://user:password@host; credentialJWT is a JWT,
+// header.payload.signature in base64url with the header starting {" (eyJ).
+var (
+	credentialURL = regexp.MustCompile(`([A-Za-z][A-Za-z0-9+.-]*://[^\s:/@"'<>]+:)[^\s@/"'<>]+@`)
+	credentialJWT = regexp.MustCompile(`\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+`)
+)
+
+// maskCredentials hides a credential no testsuite declares as a secret: the password of a URL with userinfo (a
+// database DSN, postgresql://postgres:<password>@host) and a JWT (a gateway token). Run 16-4 of cgw-qa-scenarios
+// carried both in test_results_*.json, 52 times in one file, through the vars of the suite, the testcases and the steps.
+func maskCredentials(s string) string {
+	s = credentialURL.ReplaceAllString(s, "${1}__hidden__@")
+	return credentialJWT.ReplaceAllString(s, "__hidden__")
 }
 
 func replaceSecrets(s string, secrets []string) string {
@@ -75,33 +90,25 @@ func secretKeySet(secretKeys []string) map[string]struct{} {
 	return set
 }
 
+// redactMapVars hides the declared secret keys and every secret or credential inside a value; a value with nothing
+// to hide keeps its type.
 func redactMapVars(ctx context.Context, vars H, secretKeys []string) {
-	if len(vars) == 0 || len(secretKeys) == 0 {
-		return
-	}
 	secretSet := secretKeySet(secretKeys)
 	for k, val := range vars {
-		if strings.HasPrefix(k, "venom.") {
-			continue
-		}
-		if _, ok := secretSet[k]; ok {
+		if _, ok := secretSet[k]; ok && !strings.HasPrefix(k, "venom.") {
 			vars[k] = "__hidden__"
 			continue
 		}
-		vars[k] = HideSensitive(ctx, val)
+		if cleaned := HideSensitive(ctx, val); cleaned != fmt.Sprint(val) {
+			vars[k] = cleaned
+		}
 	}
 }
 
 func redactStringMap(ctx context.Context, vars map[string]string, secretKeys []string) {
-	if len(vars) == 0 || len(secretKeys) == 0 {
-		return
-	}
 	secretSet := secretKeySet(secretKeys)
 	for k, val := range vars {
-		if strings.HasPrefix(k, "venom.") {
-			continue
-		}
-		if _, ok := secretSet[k]; ok {
+		if _, ok := secretSet[k]; ok && !strings.HasPrefix(k, "venom.") {
 			vars[k] = "__hidden__"
 			continue
 		}
@@ -113,10 +120,7 @@ func redactLogArgs(ctx context.Context, args ...interface{}) []interface{} {
 	if ctx == nil {
 		return args
 	}
-	secrets, ok := ctx.Value(ContextKey("secrets")).([]string)
-	if !ok || len(secrets) == 0 {
-		return args
-	}
+	secrets, _ := ctx.Value(ContextKey("secrets")).([]string)
 	if len(args) == 0 {
 		return args
 	}
@@ -135,7 +139,7 @@ func redactLogArg(secrets []string, arg interface{}) interface{} {
 		return nil
 	}
 	original := fmt.Sprint(arg)
-	cleaned := replaceSecrets(original, secrets)
+	cleaned := maskCredentials(replaceSecrets(original, secrets))
 	if cleaned == original {
 		return arg
 	}

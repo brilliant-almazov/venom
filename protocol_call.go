@@ -194,21 +194,7 @@ func protocolAfter(tc *TestCase, call *TestStepResult, n int) string {
 // protocolHeaders lists the headers under prefix: only the names in only (any case) when given, else all; a header
 // value dumped as a list is taken from its first element.
 func protocolHeaders(r *TestStepResult, prefix string, only []string) string {
-	values := map[string]string{}
-	for k, val := range r.ComputedVars {
-		if !strings.HasPrefix(k, prefix) {
-			continue
-		}
-		name := strings.TrimPrefix(k, prefix)
-		if strings.Contains(name, ".") || strings.HasPrefix(name, "__") {
-			continue
-		}
-		s := fmt.Sprint(val)
-		if first, ok := r.ComputedVars[k+"."+name+"0"]; ok {
-			s = fmt.Sprint(first)
-		}
-		values[name] = s
-	}
+	values := protocolHeaderValues(r, prefix)
 	var names []string
 	for name := range values {
 		if only == nil {
@@ -228,9 +214,30 @@ func protocolHeaders(r *TestStepResult, prefix string, only []string) string {
 	var b strings.Builder
 	b.WriteString("- headers:\n")
 	for _, name := range names {
-		fmt.Fprintf(&b, "  - %s: %s\n", name, protocolMask(name, values[name]))
+		fmt.Fprintf(&b, "  - %s: %s\n", name, values[name])
 	}
 	return b.String()
+}
+
+// protocolHeaderValues are the headers under prefix by name, each with its Authorization masked; a header value dumped
+// as a list is taken from its first element.
+func protocolHeaderValues(r *TestStepResult, prefix string) map[string]string {
+	values := map[string]string{}
+	for k, val := range r.ComputedVars {
+		if !strings.HasPrefix(k, prefix) {
+			continue
+		}
+		name := strings.TrimPrefix(k, prefix)
+		if strings.Contains(name, ".") || strings.HasPrefix(name, "__") {
+			continue
+		}
+		s := fmt.Sprint(val)
+		if first, ok := r.ComputedVars[k+"."+name+"0"]; ok {
+			s = fmt.Sprint(first)
+		}
+		values[name] = protocolMask(name, s)
+	}
+	return values
 }
 
 // protocolMask hides the token of an Authorization header, its scheme and length kept.

@@ -78,6 +78,8 @@ type Venom struct {
 	ParallelSuites int
 	// ProtocolDir, when set, receives one protocol file per testcase, whatever its outcome (protocol.go).
 	ProtocolDir string
+	// DryRun loads and checks the testsuites with no step run (dryrun.go).
+	DryRun bool
 }
 
 var trace = color.New(color.Attribute(90)).SprintFunc()
@@ -196,73 +198,117 @@ func (v *Venom) GetExecutorRunner(ctx context.Context, ts TestStep, h H) (contex
 	return ctx, nil, fmt.Errorf("user executor %q not found - loaded executors are: %v", name, reflect.ValueOf(v.executorsUser).MapKeys())
 }
 
-func (v *Venom) getUserExecutorFilesPath(ctx context.Context, vars map[string]string) []string {
+// userExecutorFile is a user executor file and the lib directory it was found in.
+type userExecutorFile struct {
+	path, lib string
+}
+
+// getUserExecutorFilesPath lists the user executor files, by lib directory in this order: every --lib-dir, then for
+// each testsuite every "lib" directory from its own directory up to the repository root (a directory with .git) or the
+// working directory, nearest first, then "lib" of the working directory. Scenarios keep executors in scenarios/lib while
+// suites sit in scenarios/billing/…, so a suite finds them with no --lib-dir. A lib directory that is a symlink is
+// resolved: filepath.Walk does not descend a symlinked root.
+func (v *Venom) getUserExecutorFilesPath(ctx context.Context) []userExecutorFile {
 	var libpaths []string
-	// ensure libpaths is unique
 	seen := make(map[string]struct{})
+	add := func(p string) {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			return
+		}
+		abs, err := filepath.Abs(p)
+		if err != nil {
+			return
+		}
+		if real, err := filepath.EvalSymlinks(abs); err == nil {
+			abs = real
+		}
+		if _, ok := seen[abs]; ok {
+			return
+		}
+		seen[abs] = struct{}{}
+		libpaths = append(libpaths, abs)
+	}
 
 	if v.LibDir != "" {
 		for _, lp := range strings.Split(v.LibDir, string(os.PathListSeparator)) {
-			abs := strings.TrimSpace(lp)
-			if abs == "" {
-				continue
-			}
-			absPath, err := filepath.Abs(abs)
-			if err == nil {
-				seen[absPath] = struct{}{}
-				libpaths = append(libpaths, absPath)
-			}
+			add(lp)
 		}
 	}
-
-	relLib := path.Join(vars["venom.testsuite.workdir"], "lib")
-	if absRelLib, err := filepath.Abs(relLib); err == nil {
-		if _, exists := seen[absRelLib]; !exists {
-			libpaths = append(libpaths, absRelLib)
-			seen[absRelLib] = struct{}{}
+	cwd, _ := os.Getwd()
+	for i := range v.Tests.TestSuites {
+		for _, lib := range suiteLibDirs(v.Tests.TestSuites[i].WorkDir, cwd) {
+			add(lib)
 		}
 	}
-	//use a map to avoid duplicates
-	filepaths := make(map[string]bool)
+	add(filepath.Join(cwd, "lib"))
 
+	var files []userExecutorFile
 	for _, p := range libpaths {
-		p = strings.TrimSpace(p)
-
+		if _, err := os.Stat(p); err != nil {
+			continue
+		}
+		var inLib []string
 		err := filepath.Walk(p, func(fp string, f os.FileInfo, err error) error {
-			switch ext := filepath.Ext(fp); ext {
+			switch filepath.Ext(fp) {
 			case ".yml", ".yaml":
-				filepaths[fp] = true
+				inLib = append(inLib, fp)
 			}
 			return nil
 		})
 		if err != nil {
 			Warn(ctx, "Unable to list files in lib directory %q: %v", p, err)
 		}
+		sort.Strings(inLib)
+		for _, fp := range inLib {
+			files = append(files, userExecutorFile{path: fp, lib: p})
+		}
 	}
 
-	userExecutorFiles := make([]string, len(filepaths))
-	i := 0
-	for p := range filepaths {
-		userExecutorFiles[i] = p
-		i++
-	}
-
-	sort.Strings(userExecutorFiles)
-	if len(userExecutorFiles) == 0 {
+	if len(files) == 0 {
 		Warn(ctx, "no user executor yml file selected")
 	}
-	return userExecutorFiles
+	return files
+}
+
+// suiteLibDirs is every "lib" directory from the testsuite directory up, nearest first: up to and including the
+// repository root (a directory holding .git) or the working directory, whichever comes first. A testsuite under
+// neither gets only its own lib.
+func suiteLibDirs(workdir, cwd string) []string {
+	if workdir == "" {
+		return nil
+	}
+	dir := filepath.Clean(workdir)
+	var dirs []string
+	for {
+		dirs = append(dirs, dir)
+		if dir == cwd {
+			break
+		}
+		if _, err := os.Stat(filepath.Join(dir, ".git")); err == nil {
+			break
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			dirs = dirs[:1]
+			break
+		}
+		dir = parent
+	}
+	libs := make([]string, 0, len(dirs))
+	for _, d := range dirs {
+		lib := filepath.Join(d, "lib")
+		if fi, err := os.Stat(lib); err == nil && fi.IsDir() {
+			libs = append(libs, lib)
+		}
+	}
+	return libs
 }
 
 func (v *Venom) registerUserExecutors(ctx context.Context) error {
-	vars, err := DumpStringPreserveCase(v.variables)
-	if err != nil {
-		return errors.Wrapf(err, "unable to parse variables")
-	}
-
-	executorsPath := v.getUserExecutorFilesPath(ctx, vars)
-
-	for _, f := range executorsPath {
+	executorLibs := map[string]string{}
+	for _, file := range v.getUserExecutorFilesPath(ctx) {
+		f := file.path
 		Debug(ctx, "Reading %v", f)
 		content, err := os.ReadFile(f)
 		if err != nil {
@@ -290,6 +336,12 @@ func (v *Venom) registerUserExecutors(ctx context.Context) error {
 			Raw:       content,
 		}
 
+		if lib, ok := executorLibs[ux.Executor]; ok && lib != file.lib {
+			// the executor of a nearer lib (or of --lib-dir) shadows the one of the same name further up
+			Debug(ctx, "User executor %q of %q shadowed by the one of %q", ux.Executor, f, lib)
+			continue
+		}
+		executorLibs[ux.Executor] = file.lib
 		err = v.RegisterExecutorUser(ux.Executor, ux)
 		if err != nil {
 			return errors.Wrapf(err, "unable to register user executor %q from file %q", ux.Executor, f)

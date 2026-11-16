@@ -17,7 +17,7 @@ import (
 var varRegEx = regexp.MustCompile("{{.*}}")
 
 // Parse the testcase to find unreplaced and extracted variables
-func (v *Venom) parseTestCase(_ *TestSuite, tc *TestCase) ([]string, []string, error) {
+func (v *Venom) parseTestCase(ts *TestSuite, tc *TestCase) ([]string, []string, error) {
 	dvars, err := DumpStringPreserveCase(tc.Vars)
 	if err != nil {
 		return nil, nil, err
@@ -33,20 +33,20 @@ func (v *Venom) parseTestCase(_ *TestSuite, tc *TestCase) ([]string, []string, e
 	for i := range dvars {
 		dvars[i] = escapeQuotes(dvars[i])
 	}
-	for _, rawStep := range tc.RawTestSteps {
+	for stepIndex, rawStep := range tc.RawTestSteps {
 		content, err := interpolate.Do(string(rawStep), dvars)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, dryRunErr(ts, tc, stepIndex, "", err.Error())
 		}
 
 		var step TestStep
 		if err := yaml.Unmarshal([]byte(content), &step); err != nil {
-			return nil, nil, errors.Wrapf(err, "unable to unmarshal teststep")
+			return nil, nil, dryRunErr(ts, tc, stepIndex, "", "unable to unmarshal teststep: "+err.Error())
 		}
 
 		_, exec, err := v.GetExecutorRunner(context.Background(), step, tc.Vars)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, dryRunErr(ts, tc, stepIndex, "", err.Error())
 		}
 
 		defaultResult := exec.ZeroValueResult()
