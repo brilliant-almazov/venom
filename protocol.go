@@ -34,7 +34,7 @@ func (v *Venom) writeProtocol(ctx context.Context, ts *TestSuite, tc *TestCase) 
 		Error(ctx, "unable to create protocol dir %s: %v", dir, err)
 		return
 	}
-	file := filepath.Join(dir, protocolFileName(tc.Name)+".md")
+	file := filepath.Join(dir, protocolFile(tc))
 	if err := os.WriteFile(file, []byte(HideSensitive(ctx, protocolText(ts, tc))), 0o644); err != nil {
 		Error(ctx, "unable to write protocol %s: %v", file, err)
 	}
@@ -392,8 +392,24 @@ func protocolTrace(tc *TestCase, call *TestStepResult) string {
 	}
 	id := protocolTraceID(call)
 	if id == "" {
-		return "- " + protocolNoTrace + ": the call returned no trace_id in its result, the X-Trace-Id header or meta.trace_id of the body\n"
+		return protocolStepTraces(tc)
 	}
+	return protocolTree(tc, id)
+}
+
+func protocolStepTraces(tc *TestCase) string {
+	var b strings.Builder
+	b.WriteString("- " + protocolNoTrace + ": the call returned no trace_id in its result, the X-Trace-Id header or meta.trace_id of the body\n")
+	for i := range tc.TestStepResults {
+		r := &tc.TestStepResults[i]
+		if id := protocolTraceID(r); id != "" && protocolHasCode(r) {
+			fmt.Fprintf(&b, "\n"+protocolStepLine+"\n%s", i+1, r.Name, protocolTree(tc, id))
+		}
+	}
+	return b.String()
+}
+
+func protocolTree(tc *TestCase, id string) string {
 	f, tried := protocolTreeFile(tc, id)
 	if f != "" {
 		btes, err := os.ReadFile(f)

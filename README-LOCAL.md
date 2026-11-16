@@ -114,9 +114,11 @@ hashids and the operation_id of a write, keyed on the trace of the call just bef
 
 ## 10. A protocol per testcase: `--protocol-dir`
 
-`--protocol-dir <dir>` (env `VENOM_PROTOCOL_DIR`, `.venomrc` key `protocol_dir`) writes `<dir>/<testsuite>/<testcase>.md`
+`--protocol-dir <dir>` (env `VENOM_PROTOCOL_DIR`, `.venomrc` key `protocol_dir`) writes `<dir>/<testsuite>/<testcase>--<outcome>.md`
 for every testcase, whatever its outcome: passed, failed on a `Should…` assertion, failed on a `Must…` assertion, or
-skipped by `--stop-on-failure`. Sections:
+skipped by `--stop-on-failure`. The outcome in the file name is `ok` for a passed testcase, `partial` for a failed one
+where some of its assertions held, `failed` for a failed one where none held; a skipped testcase has no outcome in the
+name, `<testcase>.md` (`protocol_outcome.go`). Sections:
 
 - `## Expected behaviour`: the `happens`, `expect`, `right` and `norm` info lines;
 - `## What is wrong`: the `wrong` info lines;
@@ -135,7 +137,8 @@ skipped by `--stop-on-failure`. Sections:
   X-Trace-Id, Traceparent, X-Request-Id and X-Build headers and the body verbatim, and the `fact` info lines;
 - `## State after`: every later call of the testcase, the read-back after a write, with its request and answer;
 - `## Trace`: the span tree `<trace_dir>/<trace_id>.md` of that call, looked up in every `trace_dir` and `traces` the
-  steps were given;
+  steps were given; when that call returned no trace id, the tree of every other step with a trace id and a code, under
+  `- step: N "<name>"` (a teardown whose stand step failed after its calls);
 - `## Verdict`: ✅, ❌ with every failed assertion of every step, or ⏭ with the skip reason.
 
 A testcase whose call returned a trace id while no tree `<dir>/<trace_id>.md` was saved fails (`traceGate`). The fork is
@@ -190,10 +193,79 @@ trace_id. Point test: `executors/cli/cli_test.go`.
 ## 13. The span tree of a saved trace: `tempo` writes `<trace_id>.md`
 
 The `tempo` executor (`trace_id`, `tempo_url`, `trace_dir`, `wait` seconds, default 20) and the traced http and grpc
-calls save `<trace_dir>/<trace_id>.json` and, next to it, the span tree `<trace_dir>/<trace_id>.md`: one span per line
-under its parent, `- <service> · <span> · <ms> ms · ✅`, `❌ <status message>` on an error status. The protocol prints
+calls save `<trace_dir>/<trace_id>.json` and, next to it, the span tree `<trace_dir>/<trace_id>.md` (`tree_md.go`):
+the heading ``### Trace `<id>` ``, a table `trace_id | root | duration, ms | spans | ❌ | source`, the line
+`summary: ✅ N spans · ❌ M spans · first problem: <service> <span> — <problem>` (or `no problems`), and the tree in a
+`text` block, `├─`/`└─` under the parent in start order, each span `<service> · <span> · <ms> ms · ✅|❌`. Under each
+span: `problem: …` when it has one, every attribute `<key>: <value>` sorted by key, every event `event: <name>` with its
+attributes, and the query `db.query.text` as `SQL: …`, one clause per line (FROM, WHERE, AND, OR, JOIN, VALUES, SET,
+GROUP BY, ORDER BY, LIMIT) wrapped at 150 characters, or `SQL: same SQL as the span above` for a query already printed.
+A span has a problem with an error status (`OTLP ERROR`), `http.response.status_code` of 400 and up (`http <code>`),
+`rpc.response.status_code` other than `OK` (`grpc <code>`), or an `exception` event; the problem adds the status
+message, every `exception.message`, and `<key>=<value>` of `fault.reason` and every `*.error.*reason` that is not
+`none`. The protocol prints
 this file under Trace and the trace gate fails a call whose tree is missing. Result: `result.trace_id`,
 `result.trace_saved` (`yes`, `late`, `no`), `result.trace_file`, `result.tree_file`, `result.spans`, `result.mismatch`.
+
+The tree of `executors/tempo/testdata/render_example.json` (golden test `TestRenderExample`):
+
+````markdown
+### Trace `4bf92f3577b34da6a3ce929d0e0e4736`
+
+| trace_id | root | duration, ms | spans | ❌ | source |
+| -- | -- | -- | -- | -- | -- |
+| `4bf92f3577b34da6a3ce929d0e0e4736` | svc-edge · POST /v1/items | 42.37 | 8 | 4 | `4bf92f3577b34da6a3ce929d0e0e4736.json` |
+
+summary: ✅ 4 spans · ❌ 4 spans · first problem: svc-edge POST /v1/items — OTLP ERROR · http 409 · item already exists · edge.error.reason=already_exists
+
+```text
+└─ svc-edge · POST /v1/items · 42.37 ms · ❌
+   │  problem: OTLP ERROR · http 409 · item already exists · edge.error.reason=already_exists
+   │  edge.error.reason: already_exists
+   │  http.request.method: POST
+   │  http.response.status_code: 409
+   │  http.route: /v1/items
+   ├─ svc-edge · auth.check · 0.25 ms · ✅
+   │     auth.result: authenticated
+   │     cache.hit: False
+   └─ svc-store · store.v1.ItemService/Create · 38.6 ms · ❌
+      │  problem: grpc ALREADY_EXISTS · fault.reason=already_exists
+      │  fault.domain: store.item
+      │  fault.reason: already_exists
+      │  rpc.method: store.v1.ItemService/Create
+      │  rpc.response.status_code: ALREADY_EXISTS
+      │  event: rpc.payload.received
+      │     rpc.request.body_size: 26
+      └─ svc-store · tx main · 37.7 ms · ❌
+         │  problem: OTLP ERROR · already_exists
+         │  event: exception
+         │     exception.message: already_exists
+         │     exception.type: *fault.Fault
+         ├─ svc-store · query · 1.7 ms · ✅
+         │     db.rows_affected: 0
+         │     db.system.name: postgresql
+         │     SQL: begin
+         ├─ svc-store · set · 0.04 ms · ✅
+         │     db.system: redis
+         │     server.address: cache.local
+         │     server.port: 6379
+         │     SQL: set lock:item:widget-1 0f8b2c6e-1d2a-4c3b-9e5f-7a6b5c4d3e2f ex 30 nx
+         ├─ svc-store · query · 35.3 ms · ❌
+         │     problem: OTLP ERROR · duplicate key value violates unique constraint "items_code_key"
+         │     db.query.text.arg.1: 1001
+         │     db.query.text.arg.2: 7
+         │     db.query.text.arg.3: widget-1
+         │     db.query.text.arg.4: 2026-01-01 00:00:00 +0000 UTC
+         │     db.rows_affected: 0
+         │     db.system.name: postgresql
+         │     SQL: INSERT INTO catalog.items (id, kind_id, code, created_at)
+         │          VALUES ($1, $2, $3, $4)
+         └─ svc-store · query · 0.2 ms · ✅
+               db.rows_affected: 0
+               db.system.name: postgresql
+               SQL: rollback
+```
+````
 
 The `tempo` step checks the saved trace with no shell: `contains`, `not_contains` (lists of substrings) and `matches`
 (list of Go regexps) are matched over one line per span, `<service> · <span> · <status> · <key>=<value> · …`

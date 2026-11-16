@@ -20,7 +20,8 @@ type callExecutor struct{}
 type Result struct {
 	StatusCode int               `json:"statuscode"`
 	Body       string            `json:"body"`
-	TraceID    string            `json:"trace_id,omitempty"`
+	TraceID    string            `json:"trace_id"`
+	Code       *int              `json:"code,omitempty"`
 	Headers    map[string]string `json:"headers,omitempty"`
 	Request    *testRequest      `json:"request,omitempty"`
 }
@@ -66,7 +67,7 @@ func runProtocolSuite(t *testing.T, suite string, stopOnFailure bool) string {
 	dir := t.TempDir()
 	traces := filepath.Join(dir, "traces")
 	require.NoError(t, os.MkdirAll(traces, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(traces, "0af7651916cd43dd8448eb211c80319c.md"), []byte("svc-billing ✅ GetAccount"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(traces, "0af7651916cd43dd8448eb211c80319c.md"), []byte("svc-a ✅ Get"), 0o644))
 	file := filepath.Join(dir, "suite.yml")
 	require.NoError(t, os.WriteFile(file, []byte(fmt.Sprintf(suite, traces)), 0o644))
 
@@ -76,6 +77,7 @@ func runProtocolSuite(t *testing.T, suite string, stopOnFailure bool) string {
 	v.RegisterExecutorBuiltin("checker", checkExecutor{})
 	v.RegisterExecutorBuiltin("gateway", gatewayExecutor{})
 	v.RegisterExecutorBuiltin("wait", waitExecutor{})
+	v.RegisterExecutorBuiltin("stand", standExecutor{})
 	v.OutputDir = dir
 	v.ProtocolDir = filepath.Join(dir, "protocols")
 	v.StopOnFailure = stopOnFailure
@@ -89,7 +91,14 @@ func runProtocolSuite(t *testing.T, suite string, stopOnFailure bool) string {
 
 func readProtocol(t *testing.T, dir, testcase string) string {
 	t.Helper()
-	btes, err := os.ReadFile(filepath.Join(dir, "suite", protocolFileName(testcase)+".md"))
+	base := filepath.Join(dir, "suite", protocolFileName(testcase))
+	files, err := filepath.Glob(base + protocolOutcomeSep + "*.md")
+	require.NoError(t, err)
+	if _, err := os.Stat(base + ".md"); err == nil {
+		files = append(files, base+".md")
+	}
+	require.Len(t, files, 1, "protocol of %s", testcase)
+	btes, err := os.ReadFile(files[0])
 	require.NoError(t, err, "protocol of %s", testcase)
 	return string(btes)
 }
@@ -119,7 +128,7 @@ testcases:
 	p := readProtocol(t, dir, "green")
 	for _, want := range []string{protocolHeadRight, "- expect: the account is read", "- right: statuscode 200", "- norm: cgw-billing: docs/api.md:12",
 		protocolHeadWrong, "- wrong: any other statuscode", protocolHeadRequest, protocolHeadAnswer, protocolHeadAfter, "- call: `caller GET /v1/billing/accounts/1`", "- statuscode: 200",
-		protocolHeadTrace, "svc-billing ✅ GetAccount", protocolHeadVerdict, protocolPassed} {
+		protocolHeadTrace, "svc-a ✅ Get", protocolHeadVerdict, protocolPassed} {
 		assert.Contains(t, p, want)
 	}
 }
@@ -141,7 +150,7 @@ testcases:
 	assert.Contains(t, p, protocolFailed)
 	assert.Contains(t, p, "result.statuscode MustEqual 200")
 	assert.Contains(t, p, "- statuscode: 500")
-	assert.Contains(t, p, "svc-billing ✅ GetAccount")
+	assert.Contains(t, p, "svc-a ✅ Get")
 }
 
 func TestProtocolStopOnFailure(t *testing.T) {
@@ -189,7 +198,7 @@ testcases:
 	assert.Contains(t, p, protocolFailed)
 	assert.Contains(t, p, "result.statuscode ShouldEqual 200")
 	assert.Contains(t, p, protocolHeadAnswer+"\n\n- statuscode: 422", "the failed call is the fact even though its vars were skipped")
-	assert.Contains(t, p, "svc-billing ✅ GetAccount")
+	assert.Contains(t, p, "svc-a ✅ Get")
 }
 
 func TestProtocolTemplateShape(t *testing.T) {
@@ -212,7 +221,7 @@ testcases:
 	assert.Contains(t, p, protocolFailed)
 	assert.Contains(t, p, "systemout ShouldEqual 200")
 	assert.Contains(t, p, "- statuscode: 404", "the call is the fact, not the check step after it")
-	assert.Contains(t, p, "svc-billing ✅ GetAccount")
+	assert.Contains(t, p, "svc-a ✅ Get")
 }
 
 const presenceSuite = `name: suite
@@ -357,7 +366,7 @@ testcases:
 		"  - Authorization: Bearer " + fmt.Sprintf(protocolMasked, 12), "  - X-Idempotency-Key: NloBboqV", "\"tenant_id\": \"7\"",
 		protocolHeadAnswer, "- statuscode: 403", "- trace_id: 0af7651916cd43dd8448eb211c80319c", "  - X-Build: dev-1",
 		"  - X-Request-Id: r-1", "  - X-Trace-Id: 0af7651916cd43dd8448eb211c80319c", "\"code\": \"role_required\"",
-		protocolHeadTrace, "svc-billing ✅ GetAccount", protocolPassed} {
+		protocolHeadTrace, "svc-a ✅ Get", protocolPassed} {
 		assert.Contains(t, p, want)
 	}
 	assert.NotContains(t, p, "secret-token")
@@ -480,4 +489,67 @@ testcases:
 	assert.Equal(t, protocolHeadRight+"\n\n- happens: the account is read by id\n- expect: the account is read\n- right: statuscode 200\n"+
 		"- norm: cgw-billing: docs/api.md:12\n\n", right)
 	assert.NotContains(t, p, "curl", "the call: text is printed nowhere")
+}
+
+type standExecutor struct{}
+
+func (standExecutor) Run(_ context.Context, step TestStep) (interface{}, error) {
+	code, _ := step.IntValue("code")
+	return Result{Code: &code}, nil
+}
+
+func TestProtocolFileNameCarriesOutcome(t *testing.T) {
+	dir := runProtocolSuite(t, `name: suite
+testcases:
+- name: green
+  steps:
+  - type: caller
+    code: 200
+    trace_dir: %[1]s
+    assertions:
+    - result.statuscode ShouldEqual 200
+- name: red
+  steps:
+  - type: caller
+    code: 500
+    trace_dir: %[1]s
+    assertions:
+    - result.statuscode ShouldEqual 200
+- name: half
+  steps:
+  - type: caller
+    code: 200
+    trace_dir: %[1]s
+    assertions:
+    - result.statuscode ShouldEqual 200
+  - type: caller
+    code: 500
+    assertions:
+    - result.statuscode ShouldEqual 200
+`, false)
+	for name, outcome := range map[string]string{"green": protocolOutcomeOK, "red": protocolOutcomeFailed, "half": protocolOutcomePartial} {
+		_, err := os.Stat(filepath.Join(dir, "suite", name+protocolOutcomeSep+outcome+".md"))
+		assert.NoError(t, err, name)
+	}
+}
+
+func TestProtocolTraceOfEveryStepWhenTheCallHasNone(t *testing.T) {
+	dir := runProtocolSuite(t, `name: suite
+testcases:
+- name: teardown
+  steps:
+  - type: stand
+    code: 1
+    assertions:
+    - result.code ShouldEqual 0
+  - type: caller
+    code: 500
+    trace_dir: %s
+    assertions:
+    - result.statuscode ShouldEqual 500
+`, false)
+	p := readProtocol(t, dir, "teardown")
+	assert.Contains(t, p, protocolHeadTrace+"\n\n- "+protocolNoTrace+": the call returned no trace_id")
+	assert.Contains(t, p, fmt.Sprintf(protocolStepLine, 2, "caller")+"\n- trace_id: 0af7651916cd43dd8448eb211c80319c")
+	assert.Contains(t, p, "svc-a ✅ Get")
 }

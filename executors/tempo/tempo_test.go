@@ -65,18 +65,22 @@ func TestNewTraceID(t *testing.T) {
 }
 
 const treeTrace = `{"batches":[
-{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"nginx-gateway"}}]},
- "scopeSpans":[{"spans":[{"spanId":"r","name":"POST /v1/billing/accounts","startTimeUnixNano":"1000000","endTimeUnixNano":"13000000"}]}]},
-{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"svc-billing"}}]},
+{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"svc-edge"}}]},
+ "scopeSpans":[{"spans":[{"spanId":"r","name":"POST /v1/items","startTimeUnixNano":"1000000","endTimeUnixNano":"13000000"}]}]},
+{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"svc-a"}}]},
  "scopeSpans":[{"spans":[
   {"spanId":"b","parentSpanId":"a","name":"Insert","startTimeUnixNano":"3000000","endTimeUnixNano":"4000000","status":{"code":"STATUS_CODE_ERROR","message":"duplicate key"}},
-  {"spanId":"a","parentSpanId":"r","name":"CreateAccount","startTimeUnixNano":"2000000","endTimeUnixNano":"12000000","status":{"code":0}}]}]}]}`
+  {"spanId":"a","parentSpanId":"r","name":"CreateItem","startTimeUnixNano":"2000000","endTimeUnixNano":"12000000","status":{"code":0}}]}]}]}`
 
 func TestRenderTree(t *testing.T) {
-	want := "- nginx-gateway · POST /v1/billing/accounts · 12.0 ms · ✅\n" +
-		"  - svc-billing · CreateAccount · 10.0 ms · ✅\n" +
-		"    - svc-billing · Insert · 1.0 ms · ❌ duplicate key\n"
-	if got := Render([]byte(treeTrace)); got != want {
+	want := "### Trace `t1`\n\n| trace_id | root | duration, ms | spans | ❌ | source |\n| -- | -- | -- | -- | -- | -- |\n" +
+		"| `t1` | svc-edge · POST /v1/items | 12.0 | 3 | 1 | `t1.json` |\n\n" +
+		"summary: ✅ 2 spans · ❌ 1 spans · first problem: svc-a Insert — OTLP ERROR · duplicate key\n\n```text\n" +
+		"└─ svc-edge · POST /v1/items · 12.0 ms · ✅\n" +
+		"   └─ svc-a · CreateItem · 10.0 ms · ✅\n" +
+		"      └─ svc-a · Insert · 1.0 ms · ❌\n" +
+		"            problem: OTLP ERROR · duplicate key\n```\n"
+	if got := Render("t1", "t1.json", []byte(treeTrace)); got != want {
 		t.Fatalf("tree\n%s\nwant\n%s", got, want)
 	}
 }
@@ -94,7 +98,7 @@ func TestSaveWritesTree(t *testing.T) {
 		t.Fatalf("tree file %q", r.TreeFile)
 	}
 	body, err := os.ReadFile(r.TreeFile)
-	if err != nil || string(body) != Render([]byte(treeTrace)) {
+	if err != nil || string(body) != Render("0123456789abcdef0123456789abcdef", "0123456789abcdef0123456789abcdef.json", []byte(treeTrace)) {
 		t.Fatalf("tree %q err %v", body, err)
 	}
 }
@@ -119,8 +123,8 @@ func TestMismatch(t *testing.T) {
 	if err != nil || m != "" {
 		t.Fatalf("all hold, got %q %v", m, err)
 	}
-	m, err = Mismatch(lines, Checks{Contains: []string{"rows=4"}, NotContains: []string{"timeout"}, Matches: []string{`^svc-billing`}})
-	want := "no span contains \"rows=4\"\nspan \"svc-crawler · Store · ❌ timeout\" contains \"timeout\"\nno span matches \"^svc-billing\""
+	m, err = Mismatch(lines, Checks{Contains: []string{"rows=4"}, NotContains: []string{"timeout"}, Matches: []string{`^svc-a`}})
+	want := "no span contains \"rows=4\"\nspan \"svc-crawler · Store · ❌ timeout\" contains \"timeout\"\nno span matches \"^svc-a\""
 	if err != nil || m != want {
 		t.Fatalf("mismatch %q %v", m, err)
 	}

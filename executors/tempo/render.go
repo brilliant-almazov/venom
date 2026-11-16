@@ -36,12 +36,17 @@ type renderScopeName struct {
 // renderAttr is an OTLP attribute; its value is one of the typed fields, an int given as a JSON string or number.
 type renderAttr struct {
 	Key   string `json:"key"`
-	Value struct {
-		StringValue *string          `json:"stringValue"`
-		IntValue    *json.RawMessage `json:"intValue"`
-		DoubleValue *json.Number     `json:"doubleValue"`
-		BoolValue   *bool            `json:"boolValue"`
-	} `json:"value"`
+	Value renderValue `json:"value"`
+}
+
+type renderValue struct {
+	StringValue *string          `json:"stringValue"`
+	IntValue    *json.RawMessage `json:"intValue"`
+	DoubleValue *json.Number     `json:"doubleValue"`
+	BoolValue   *bool            `json:"boolValue"`
+	ArrayValue  *struct {
+		Values []renderValue `json:"values"`
+	} `json:"arrayValue"`
 }
 
 type renderSpan struct {
@@ -51,6 +56,7 @@ type renderSpan struct {
 	Start        json.RawMessage `json:"startTimeUnixNano"`
 	End          json.RawMessage `json:"endTimeUnixNano"`
 	Attributes   []renderAttr    `json:"attributes"`
+	Events       []renderEvent   `json:"events"`
 	Status       struct {
 		Code    json.RawMessage `json:"code"`
 		Message string          `json:"message"`
@@ -86,38 +92,6 @@ func readSpans(body []byte) []renderSpan {
 	}
 	sort.SliceStable(spans, func(i, j int) bool { return nanos(spans[i].Start) < nanos(spans[j].Start) })
 	return spans
-}
-
-// Render prints the span tree of a Tempo trace as Markdown, one span per line under its parent, in start order:
-// "- <service> · <span> · <ms> ms · ✅" and "❌ <status message>" for a span with an error status. A span whose parent
-// is not in the trace is a root.
-func Render(body []byte) string {
-	spans := readSpans(body)
-	ids := map[string]bool{}
-	for _, s := range spans {
-		ids[s.SpanID] = true
-	}
-	children := map[string][]renderSpan{}
-	for _, s := range spans {
-		parent := s.ParentSpanID
-		if !ids[parent] || parent == s.SpanID {
-			parent = ""
-		}
-		children[parent] = append(children[parent], s)
-	}
-	var b strings.Builder
-	var walk func(parent string, depth int)
-	walk = func(parent string, depth int) {
-		for _, s := range children[parent] {
-			fmt.Fprintf(&b, "%s- %s · %s · %s ms · %s\n", strings.Repeat("  ", depth), s.service, s.Name,
-				strconv.FormatFloat(float64(nanos(s.End)-nanos(s.Start))/1e6, 'f', 1, 64), status(s))
-			if s.SpanID != "" {
-				walk(s.SpanID, depth+1)
-			}
-		}
-	}
-	walk("", 0)
-	return b.String()
 }
 
 // ScopeKey is the key under which a span line carries the instrumentation scope name of its span.
@@ -215,7 +189,10 @@ func Mismatch(lines []string, c Checks) (string, error) {
 
 // text is the attribute value as a string.
 func (a renderAttr) text() string {
-	v := a.Value
+	return a.Value.text()
+}
+
+func (v renderValue) text() string {
 	switch {
 	case v.StringValue != nil:
 		return *v.StringValue
@@ -225,6 +202,12 @@ func (a renderAttr) text() string {
 		return v.DoubleValue.String()
 	case v.BoolValue != nil:
 		return strconv.FormatBool(*v.BoolValue)
+	case v.ArrayValue != nil:
+		items := make([]string, 0, len(v.ArrayValue.Values))
+		for _, i := range v.ArrayValue.Values {
+			items = append(items, i.text())
+		}
+		return strings.Join(items, ",")
 	}
 	return ""
 }

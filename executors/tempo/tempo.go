@@ -298,7 +298,7 @@ func spanCount(body []byte) int {
 
 // write puts the trace to file and its span tree next to it as .md.
 func write(file string, body []byte) error {
-	if err := writeFile(strings.TrimSuffix(file, ".json")+".md", []byte(Render(body))); err != nil {
+	if err := writeFile(strings.TrimSuffix(file, ".json")+".md", []byte(Render(strings.TrimSuffix(filepath.Base(file), ".json"), filepath.Base(file), body))); err != nil {
 		return err
 	}
 	return writeFile(file, body)
