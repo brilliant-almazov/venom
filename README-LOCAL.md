@@ -236,10 +236,6 @@ summary: ✅ 4 spans · ❌ 4 spans · first problem: svc-edge POST /v1/items �
       │  rpc.response.status_code: ALREADY_EXISTS
       │  event: rpc.payload.received
       │     rpc.request.body_size: 26
-      ├─ svc-store · get · 0.4 ms · ✅
-      │     db.system: redis
-      │     server.address: cache.local
-      │     SQL: get kind:widget
       └─ svc-store · tx main · 37.7 ms · ❌
          │  problem: OTLP ERROR · already_exists
          │  event: exception
@@ -249,6 +245,11 @@ summary: ✅ 4 spans · ❌ 4 spans · first problem: svc-edge POST /v1/items �
          │     db.rows_affected: 0
          │     db.system.name: postgresql
          │     SQL: begin
+         ├─ svc-store · set · 0.04 ms · ✅
+         │     db.system: redis
+         │     server.address: cache.local
+         │     server.port: 6379
+         │     SQL: set lock:item:widget-1 0f8b2c6e-1d2a-4c3b-9e5f-7a6b5c4d3e2f ex 30 nx
          ├─ svc-store · query · 35.3 ms · ❌
          │     problem: OTLP ERROR · duplicate key value violates unique constraint "items_code_key"
          │     db.query.text.arg.1: 1001
