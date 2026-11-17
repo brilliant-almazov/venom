@@ -3,6 +3,8 @@ package venom
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"strings"
 )
 
 // RunArtifacts lays the artifacts of a run out in a folder of its own (package runartifacts, --run-dir): it sees each
@@ -119,6 +121,25 @@ func TempoURL(tc *TestCase) string {
 // ProtocolFileName is the file name of the protocol of a testcase named name, with no extension.
 func ProtocolFileName(name string) string {
 	return protocolFileName(name)
+}
+
+// protocolRowID is the row id a testcase name starts with: SB-01-01, SB-02-01-03, GW-B0005, S-001.
+var protocolRowID = regexp.MustCompile(`^[A-Z][A-Z0-9]*(?:-[A-Z]?[0-9][0-9A-Z]*)+`)
+
+// ProtocolOutcomeFile is the file name of the protocol of a testcase that ended, with no extension: the outcome ok,
+// partial or failed (section 10) between the row id and the rest of the name, <row id>-<outcome>-<rest>, or first when
+// the name has no row id; a testcase with no such outcome keeps its name alone.
+func ProtocolOutcomeFile(tc *TestCase) string {
+	name := protocolFileName(CaseName(tc))
+	o := protocolOutcome(tc)
+	if o == "" {
+		return name
+	}
+	id := protocolRowID.FindString(name)
+	if id == "" || id == name {
+		return strings.TrimSuffix(o+"-"+name, "-")
+	}
+	return id + "-" + o + strings.TrimPrefix(name, id)
 }
 
 // CaseName is the testcase name as written in the testsuite; Venom runs it under its slug.

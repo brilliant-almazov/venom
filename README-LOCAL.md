@@ -604,7 +604,7 @@ or drawing by hand (package `runartifacts`):
 
 | Path | What |
 | -- | -- |
-| `<run>/protocols/<testsuite>/<testcase>.md` | the protocol of section 10 for every testcase, whatever its outcome, named by the testcase name as written, with a `## Links` section after its file line |
+| `<run>/protocols/<testsuite>/<row id>-<outcome>-<rest>.md` | the protocol of section 10 for every testcase, whatever its outcome, named by the testcase name as written with its outcome `ok`, `partial` or `failed` of section 10 between the row id and the rest of the name (`SB-01-01-ok-POST-webhook-….md`; first, `ok-<name>.md`, for a name with no row id; `ProtocolOutcomeFile`), with a `## Links` section after its file line; a testcase skipped, interrupted, not run or pending has no outcome in the name, `<testcase>.md`; the protocol written as the testcase began is renamed when it ends, one file per testcase, and INDEX.md, the schemes, REPORT.md and PROBLEMS.md link the new name |
 | `<run>/protocols/traces/<trace_id>.md` | the span tree of every traced call of the run (section 13), secrets hidden |
 | `<run>/protocols/INDEX.md` | one row per testcase in testsuite file order: `suite`, `testcase`, `verdict` (✅/❌/⏸ and the answer code, or `⏸ interrupted`, `⏸ not run`, `⏸ pending`), `trace` (a link to the tree, `trace not saved <trace_id>`, or `—` for a call with no trace), `link` to the protocol, `scenario` (`<file>:<line>`), `scheme` of the case |
 | `<run>/schemes/SYSTEM.md` | the scheme of the system: every path, every case of it and every transition of the case, drawn from the run; the paths; the checked cases |

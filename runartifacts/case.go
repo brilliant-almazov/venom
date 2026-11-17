@@ -2,12 +2,13 @@ package runartifacts
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 
 	"github.com/ovh/venom"
 )
 
-// Testcase writes protocols/<testsuite>/<testcase>.md the moment the testcase ends, copies its span trees to
+// Testcase writes protocols/<testsuite>/<testcase>--<ok|partial|failed>.md the moment the testcase ends, copies its span trees to
 // protocols/traces and redraws the index, the report, the problems and the schemes it is on.
 func (w *Writer) Testcase(ctx context.Context, ts *venom.TestSuite, tc *venom.TestCase) {
 	view := venom.ProtocolOf(ctx, ts, tc)
@@ -21,6 +22,7 @@ func (w *Writer) Testcase(ctx context.Context, ts *venom.TestSuite, tc *venom.Te
 
 	r := w.rowOf(ts, caseIndex(ts, tc))
 	r.state = stateDone
+	w.renameProtocol(r, venom.ProtocolOutcomeFile(tc))
 	r.trace = ""
 
 	for id, f := range view.Trees {
@@ -48,4 +50,19 @@ func (w *Writer) Testcase(ctx context.Context, ts *venom.TestSuite, tc *venom.Te
 	}
 
 	w.refresh(ctx, r)
+}
+
+// renameProtocol names the protocol of r by the outcome of its testcase; the protocol written under the former name as
+// the testcase began is removed, so one file per testcase stays.
+func (w *Writer) renameProtocol(r *row, name string) {
+	p := filepath.Join(filepath.Dir(r.protocol), name+".md")
+	if p == r.protocol {
+		return
+	}
+
+	if err := os.Remove(r.protocol); err != nil && !os.IsNotExist(err) {
+		venom.Error(context.Background(), "unable to remove protocol %s: %v", r.protocol, err)
+	}
+
+	r.protocol = p
 }
