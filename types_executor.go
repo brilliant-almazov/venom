@@ -317,6 +317,8 @@ func (v *Venom) RunUserExecutor(ctx context.Context, runner ExecutorRunner, tcIn
 		}
 	}
 
+	keepUserExecutorCall(tcIn, tc, tsIn)
+
 	computedVars, err := DumpStringPreserveCase(tc.computedVars)
 	if err != nil {
 		return nil, errors.Wrapf(err, "unable to dump testcase computedVars")
@@ -413,4 +415,25 @@ func quoteTemplateExpressions(content []byte) []byte {
 
 	// Put quotes around the template expression and what follows it
 	return re.ReplaceAll(content, []byte(`$1$2"$3$4"`))
+}
+
+// keepUserExecutorCall puts the result of the call made inside a user executor — its request, code, answer and trace id —
+// on the step of the executor, and the trace folders of its steps on the testcase, whatever the outcome. A user executor
+// that checks the answer inside itself fails before its output is built, so without it the protocol of a call that did
+// not answer 200 had no request, no answer and no trace (runs 17-1…17-3). The output of a passed executor is added over
+// it (RunTestStep), so its keys win.
+func keepUserExecutorCall(tcIn, inner *TestCase, tsIn *TestStepResult) {
+	tcIn.traceDirs = append(tcIn.traceDirs, protocolTraceDirs(inner)...)
+	call, _ := protocolLastCall(inner, nil)
+	if call == nil {
+		return
+	}
+	if tsIn.ComputedVars == nil {
+		tsIn.ComputedVars = H{}
+	}
+	for k, val := range call.ComputedVars {
+		if strings.HasPrefix(k, "result.") {
+			tsIn.ComputedVars[k] = val
+		}
+	}
 }

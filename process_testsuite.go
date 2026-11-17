@@ -188,6 +188,9 @@ func (v *Venom) runOneTestCase(ctx context.Context, ts *TestSuite, tc *TestCase)
 	} else if tc.Status != StatusSkip {
 		tc.Status = StatusPass
 	}
+	if v.Artifacts != nil {
+		v.Artifacts.BeforeVerdict(ctx, ts, tc)
+	}
 	traceGate(tc)
 	hasFailure = tc.Status == StatusFail
 	v.writeProtocol(ctx, ts, tc)

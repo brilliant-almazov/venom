@@ -26,10 +26,14 @@ var protocolInfoLine = regexp.MustCompile(`^\s*([a-z_]+)\s*:\s*(.*?)(?:\s+\([^()
 // after a failed Must assertion or under --stop-on-failure never runs, and a failed step sets none of its vars, so a
 // suite step cannot write it.
 func (v *Venom) writeProtocol(ctx context.Context, ts *TestSuite, tc *TestCase) {
+	if v.Artifacts != nil {
+		v.writeProtocolIO(ctx, ts, tc, v.OutputDir)
+		v.Artifacts.Testcase(ctx, ts, tc)
+	}
 	if v.ProtocolDir == "" {
 		return
 	}
-	v.writeProtocolIO(ctx, ts, tc)
+	v.writeProtocolIO(ctx, ts, tc, v.ProtocolDir)
 	dir := filepath.Join(v.ProtocolDir, slug.Make(ts.ShortName))
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		Error(ctx, "unable to create protocol dir %s: %v", dir, err)
@@ -401,6 +405,7 @@ func protocolTrace(tc *TestCase, call *TestStepResult) string {
 func protocolStepTraces(tc *TestCase) string {
 	var b strings.Builder
 	b.WriteString("- " + protocolNoTrace + ": the call returned no trace_id in its result, the X-Trace-Id header or meta.trace_id of the body\n")
+	b.WriteString(protocolDBReads(tc))
 	for i := range tc.TestStepResults {
 		r := &tc.TestStepResults[i]
 		if id := protocolTraceID(r); id != "" && protocolHasCode(r) {
@@ -419,14 +424,20 @@ func protocolTree(tc *TestCase, id string) string {
 		}
 	}
 	if len(tried) == 0 {
-		return fmt.Sprintf("- trace_id: %s\n"+protocolNoTree+" no step was given trace_dir or traces\n", id)
+		return fmt.Sprintf("- trace_id: %s\n"+protocolNoTree+" %s: no step was given trace_dir or traces\n", id, id)
 	}
-	return fmt.Sprintf("- trace_id: %s\n"+protocolNoTree+" %s\n", id, strings.Join(tried, ", "))
+	return fmt.Sprintf("- trace_id: %s\n"+protocolNoTree+" %s: %s\n", id, id, strings.Join(tried, ", "))
 }
 
 func protocolTraceDirs(tc *TestCase) []string {
 	var dirs []string
 	seen := map[string]bool{}
+	for _, d := range tc.traceDirs {
+		if !seen[d] {
+			seen[d] = true
+			dirs = append(dirs, d)
+		}
+	}
 	for _, r := range tc.TestStepResults {
 		m := protocolStep(&r)
 		for _, k := range []string{"trace_dir", "traces"} {
@@ -464,4 +475,41 @@ func protocolVerdict(tc *TestCase) string {
 		}
 	}
 	return b.String()
+}
+
+// protocolDBReads are the database reads of a testcase whose call carries no trace (the monolith): each sql step with
+// its commands and the rows it read, in the place of the span tree.
+func protocolDBReads(tc *TestCase) string {
+	var b strings.Builder
+	for i := range tc.TestStepResults {
+		r := &tc.TestStepResults[i]
+		m := protocolStep(r)
+		if protocolField(m["type"]) != "sql" {
+			continue
+		}
+		fmt.Fprintf(&b, "\n"+protocolDBReadLine+"\n", i+1, r.Name, r.Status)
+		for _, c := range protocolCommands(m["commands"]) {
+			fmt.Fprintf(&b, "  - query: `%s`\n", c)
+		}
+		b.WriteString(protocolBodyBlock("rows", fmt.Sprint(r.ComputedVars["result.out"])))
+	}
+	if b.Len() == 0 {
+		return "- " + protocolNoDBRead + "\n"
+	}
+	return b.String()
+}
+
+func protocolCommands(v interface{}) []string {
+	list, ok := v.([]interface{})
+	if !ok {
+		if v == nil {
+			return nil
+		}
+		return []string{fmt.Sprint(v)}
+	}
+	out := make([]string, 0, len(list))
+	for _, c := range list {
+		out = append(out, strings.Join(strings.Fields(fmt.Sprint(c)), " "))
+	}
+	return out
 }

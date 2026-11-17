@@ -40,10 +40,10 @@ type protocolIOLine struct {
 	DurationS       float64           `json:"duration_s"`
 }
 
-// writeProtocolIO appends <ProtocolDir>/io.jsonl with one line per call of the testcase: a step with a code
+// writeProtocolIO appends <dir>/io.jsonl with one line per call of the testcase: a step with a code
 // (result.statuscode or result.code), whatever its outcome. Run 16-4 of cgw-qa-scenarios had no such log.
-func (v *Venom) writeProtocolIO(ctx context.Context, ts *TestSuite, tc *TestCase) {
-	if v.ProtocolDir == "" {
+func (v *Venom) writeProtocolIO(ctx context.Context, ts *TestSuite, tc *TestCase, dir string) {
+	if dir == "" {
 		return
 	}
 	var b strings.Builder
@@ -63,11 +63,11 @@ func (v *Venom) writeProtocolIO(ctx context.Context, ts *TestSuite, tc *TestCase
 	if b.Len() == 0 {
 		return
 	}
-	if err := os.MkdirAll(v.ProtocolDir, 0o755); err != nil {
-		Error(ctx, "unable to create protocol dir %s: %v", v.ProtocolDir, err)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		Error(ctx, "unable to create protocol dir %s: %v", dir, err)
 		return
 	}
-	file := filepath.Join(v.ProtocolDir, protocolIOFile)
+	file := filepath.Join(dir, protocolIOFile)
 	protocolIOMu.Lock()
 	defer protocolIOMu.Unlock()
 	f, err := os.OpenFile(file, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
