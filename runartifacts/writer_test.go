@@ -161,8 +161,8 @@ func TestSchemeBarsAfterEveryTestcase(t *testing.T) {
 }
 
 // The scheme of the suite drawn by hand at intake lives in QA, schemes/<suite>, and wins over a schemes folder of the
-// scenario set: every run copies it as is next to the runs, cases/<suite>/schemes, and its filled copy, bars and all,
-// into <run>/schemes/ after every testcase.
+// scenario set: every run copies it next to the runs, cases/<suite>/schemes, filled live with its anchors kept, and its
+// filled copy, bars and all, into <run>/schemes/ after every testcase.
 func TestSchemeFromQA(t *testing.T) {
 	root := t.TempDir()
 	qa := filepath.Join(root, "cgw-qa")
@@ -190,8 +190,60 @@ func TestSchemeFromQA(t *testing.T) {
 
 	mirror, err := os.ReadFile(filepath.Join(qa, "cases", "supabase", SchemesDir, "1-system.md"))
 	require.NoError(t, err)
-	assert.Equal(t, drawn, string(mirror))
+	assert.Equal(t, "gateway ⟦SB-01-01:bar⟧⟪[████████████████████] 100 %  ✅ 200⟫\n", string(mirror))
 	require.NoError(t, w.Finish(ctx, &venom.Tests{}))
+}
+
+// The scheme next to the runs, cases/<suite>/schemes, is the live one: after every testcase of the running run each
+// anchor shows its value right after it, ⟦<anchor>⟧⟪<value>⟫, and the next run fills the same anchors again; the run
+// folder keeps the final copy with the values alone.
+func TestLiveSchemeNextToRuns(t *testing.T) {
+	root := t.TempDir()
+	set := filepath.Join(root, "cases", "supabase")
+	live := filepath.Join(set, SchemesDir, "1-system.md")
+	require.NoError(t, os.MkdirAll(filepath.Dir(live), 0o755))
+	require.NoError(t, os.WriteFile(live, []byte("gateway ⟦SB-01 SB-02:bar⟧\n├─ ⟦SB-01⟧\n└─ ⟦SB-02⟧\n"), 0o644))
+
+	ts := &venom.TestSuite{Name: "SB webhook", ShortName: "webhook", Filepath: filepath.Join(root, "scenarios", "suite.yml")}
+	ts.TestCases = []venom.TestCase{
+		{TestCaseInput: venom.TestCaseInput{Name: "SB-01 receive"}, Status: venom.StatusPass,
+			TestStepResults: []venom.TestStepResult{call(venom.StatusPass, 200, "", "")}},
+		{TestCaseInput: venom.TestCaseInput{Name: "SB-02 read"}, Status: venom.StatusFail,
+			TestStepResults: []venom.TestStepResult{call(venom.StatusFail, 500, "", "")}},
+	}
+
+	read := func(file string) string {
+		body, err := os.ReadFile(file)
+		require.NoError(t, err)
+
+		return string(body)
+	}
+
+	ctx := context.Background()
+	run := filepath.Join(set, "runs", "2026-11", "18-2")
+	w := New(run)
+	w.Plan(&venom.Tests{TestSuites: []venom.TestSuite{*ts}})
+	w.Testcase(ctx, ts, &ts.TestCases[0])
+
+	assert.Equal(t, "gateway ⟦SB-01 SB-02:bar⟧⟪[██████████░░░░░░░░░░] 50 %  ⏸ 1/2⟫\n├─ ⟦SB-01⟧⟪✅ 200⟫\n└─ ⟦SB-02⟧⟪⏸⟫\n",
+		read(live))
+
+	w.Testcase(ctx, ts, &ts.TestCases[1])
+	require.NoError(t, w.Finish(ctx, &venom.Tests{}))
+
+	assert.Equal(t, "gateway ⟦SB-01 SB-02:bar⟧⟪[██████████░░░░░░░░░░] 50 %  ❌ 1/2⟫\n├─ ⟦SB-01⟧⟪✅ 200⟫\n└─ ⟦SB-02⟧⟪❌ 500⟫\n",
+		read(live))
+	assert.Equal(t, "gateway [██████████░░░░░░░░░░] 50 %  ❌ 1/2\n├─ ✅ 200\n└─ ❌ 500\n", read(filepath.Join(run, SchemesDir, "1-system.md")))
+
+	ts.TestCases[1].Status = venom.StatusPass
+	ts.TestCases[1].TestStepResults = []venom.TestStepResult{call(venom.StatusPass, 200, "", "")}
+	next := New(filepath.Join(set, "runs", "2026-11", "18-3"))
+	next.Testcase(ctx, ts, &ts.TestCases[0])
+	next.Testcase(ctx, ts, &ts.TestCases[1])
+	require.NoError(t, next.Finish(ctx, &venom.Tests{}))
+
+	assert.Equal(t, "gateway ⟦SB-01 SB-02:bar⟧⟪[████████████████████] 100 %  ✅ 2/2⟫\n├─ ⟦SB-01⟧⟪✅ 200⟫\n└─ ⟦SB-02⟧⟪✅ 200⟫\n",
+		read(live))
 }
 
 // A call of a user executor names Tempo by tempo, not tempo_url, and its trace_save was given no traces folder: the

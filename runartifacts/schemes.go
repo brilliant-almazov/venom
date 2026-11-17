@@ -30,7 +30,7 @@ func findSchemes(suiteFile string) string {
 
 // fillSchemes copies every scheme folder of the run to <run>/schemes with each anchor replaced by the run (anchors.go);
 // the rest of the text is kept as it is. The QA scheme of the suite is first copied as is next to its runs
-// (mirrorSchemes).
+// (mirrorSchemes); the scheme next to the runs is then filled in place with its anchors kept (fillLive).
 func (w *Writer) fillSchemes(ctx context.Context) error {
 	if err := w.mirrorSchemes(); err != nil {
 		venom.Error(ctx, "unable to copy the scheme of the suite next to its runs: %v", err)
@@ -38,8 +38,15 @@ func (w *Writer) fillSchemes(ctx context.Context) error {
 	}
 
 	for _, dir := range w.schemeFolders() {
-		if err := w.fillFolder(dir); err != nil {
+		if err := w.fillFolder(dir, filepath.Join(w.dir, SchemesDir), false); err != nil {
 			venom.Error(ctx, "unable to fill the schemes of %s: %v", dir, err)
+			return err
+		}
+	}
+
+	if set := setSchemes(w.dir); set != "" {
+		if err := w.fillFolder(set, set, true); err != nil {
+			venom.Error(ctx, "unable to fill the scheme next to the runs %s: %v", set, err)
 			return err
 		}
 	}
@@ -56,9 +63,7 @@ func (w *Writer) schemeFolders() []string {
 		return []string{qa}
 	}
 
-	set := filepath.Join(w.dir, "..", "..", "..", SchemesDir)
-
-	if st, err := os.Stat(set); err == nil && st.IsDir() {
+	if set := setSchemes(w.dir); set != "" {
 		return []string{set}
 	}
 
@@ -77,7 +82,9 @@ func (w *Writer) schemeFolders() []string {
 	return dirs
 }
 
-func (w *Writer) fillFolder(src string) error {
+// fillFolder writes every file of the scheme folder src to the folder to with its anchors filled; live keeps the
+// anchors with their values (fill), so src and to may be the same folder.
+func (w *Writer) fillFolder(src, to string, live bool) error {
 	return filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
@@ -93,10 +100,10 @@ func (w *Writer) fillFolder(src string) error {
 			return err
 		}
 
-		to := filepath.Join(w.dir, SchemesDir, rel)
-		filled := fill{rows: w.layout().rows, from: filepath.Dir(to)}.text(string(body))
+		file := filepath.Join(to, rel)
+		filled := fill{rows: w.layout().rows, from: filepath.Dir(file), live: live}.text(string(body))
 
-		return writeFile(to, []byte(filled))
+		return writeFile(file, []byte(filled))
 	})
 }
 
@@ -129,6 +136,29 @@ func (w *Writer) mirrorSchemes() error {
 
 		return writeFile(filepath.Join(to, rel), body)
 	})
+}
+
+// setSchemes is the scheme folder next to the runs, <set>/schemes for a run folder <set>/runs/<YYYY-MM>/<DD-n>; empty
+// when dir is not laid out so or the set has no scheme folder.
+func setSchemes(dir string) string {
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return ""
+	}
+
+	runs := filepath.Dir(filepath.Dir(abs))
+
+	if filepath.Base(runs) != runsDir {
+		return ""
+	}
+
+	set := filepath.Join(filepath.Dir(runs), SchemesDir)
+
+	if st, err := os.Stat(set); err != nil || !st.IsDir() {
+		return ""
+	}
+
+	return set
 }
 
 // qaSchemes is the QA scheme of the suite for the run folder dir: <qa>/schemes/<suite> for
