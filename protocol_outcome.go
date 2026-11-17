@@ -7,27 +7,27 @@ const (
 	protocolOutcomePartial = "partial"
 )
 
+// ProtocolOutcomeFailed is the outcome of a protocol whose testcase proved nothing: failed with no assertion held,
+// skipped, interrupted before any assertion held, never started.
+const ProtocolOutcomeFailed = protocolOutcomeFailed
+
+// protocolOutcome is the outcome of every testcase, never empty: ok when it passed, partial when it did not pass and at
+// least one assertion held, failed otherwise — skipped, interrupted and not run are not passed («Ничего скипаться не
+// должно»).
 func protocolOutcome(tc *TestCase) string {
-	switch tc.Status {
-	case StatusPass:
+	if tc.Status == StatusPass {
 		return protocolOutcomeOK
-	case StatusFail:
-		for _, r := range tc.TestStepResults {
-			for _, a := range r.AssertionsApplied.Assertions {
-				if a.IsOK {
-					return protocolOutcomePartial
-				}
+	}
+	for _, r := range tc.TestStepResults {
+		for _, a := range r.AssertionsApplied.Assertions {
+			if a.IsOK {
+				return protocolOutcomePartial
 			}
 		}
-		return protocolOutcomeFailed
 	}
-	return ""
+	return protocolOutcomeFailed
 }
 
 func protocolFile(tc *TestCase) string {
-	name := protocolFileName(tc.Name)
-	if o := protocolOutcome(tc); o != "" {
-		name += protocolOutcomeSep + o
-	}
-	return name + ".md"
+	return protocolFileName(tc.Name) + protocolOutcomeSep + protocolOutcome(tc) + ".md"
 }

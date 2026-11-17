@@ -141,8 +141,9 @@ testcases:
 	}
 }
 
-// The protocol of a testcase that ended carries its outcome in the file name: ok, partial or failed; a skipped testcase
-// keeps its name alone (run 17-9: «где статус прогона в нахвание файла протокла?»).
+// The protocol of every testcase carries its outcome in the file name: ok, partial or failed; a skipped testcase too,
+// failed, or partial when an assertion held (run 17-9: «где статус прогона в нахвание файла протокла?»; «Ничего
+// скипаться не должно»).
 func TestProtocolOutcomeFile(t *testing.T) {
 	applied := func(ok ...bool) TestStepResult {
 		var r TestStepResult
@@ -160,7 +161,9 @@ func TestProtocolOutcomeFile(t *testing.T) {
 	assert.Equal(t, "SB-01-01-ok-webhook", ProtocolOutcomeFile(tc(StatusPass, applied(true))))
 	assert.Equal(t, "SB-01-01-partial-webhook", ProtocolOutcomeFile(tc(StatusFail, applied(true, false))))
 	assert.Equal(t, "SB-01-01-failed-webhook", ProtocolOutcomeFile(tc(StatusFail, applied(false))))
-	assert.Equal(t, "SB-01-01-webhook", ProtocolOutcomeFile(tc(StatusSkip)))
+	assert.Equal(t, "SB-01-01-failed-webhook", ProtocolOutcomeFile(tc(StatusSkip)))
+	assert.Equal(t, "SB-01-01-partial-webhook", ProtocolOutcomeFile(tc(StatusSkip, applied(true))))
+	assert.Equal(t, "SB-01-01-failed-webhook", ProtocolOutcomeName("SB-01-01 webhook", ProtocolOutcomeFailed))
 
 	noRowID := tc(StatusPass, applied(true))
 	noRowID.originalName = "webhook answers 200"

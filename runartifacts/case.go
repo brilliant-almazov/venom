@@ -8,7 +8,7 @@ import (
 	"github.com/ovh/venom"
 )
 
-// Testcase writes protocols/<testsuite>/<testcase>--<ok|partial|failed>.md the moment the testcase ends, copies its span trees to
+// Testcase writes protocols/<testsuite>/<row id>-<ok|partial|failed>-<rest>.md the moment the testcase ends, copies its span trees to
 // protocols/traces and redraws the index, the report, the problems and the schemes it is on.
 func (w *Writer) Testcase(ctx context.Context, ts *venom.TestSuite, tc *venom.TestCase) {
 	view := venom.ProtocolOf(ctx, ts, tc)

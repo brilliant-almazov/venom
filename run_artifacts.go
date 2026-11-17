@@ -126,20 +126,22 @@ func ProtocolFileName(name string) string {
 // protocolRowID is the row id a testcase name starts with: SB-01-01, SB-02-01-03, GW-B0005, S-001.
 var protocolRowID = regexp.MustCompile(`^[A-Z][A-Z0-9]*(?:-[A-Z]?[0-9][0-9A-Z]*)+`)
 
-// ProtocolOutcomeFile is the file name of the protocol of a testcase that ended, with no extension: the outcome ok,
-// partial or failed (section 10) between the row id and the rest of the name, <row id>-<outcome>-<rest>, or first when
-// the name has no row id; a testcase with no such outcome keeps its name alone.
+// ProtocolOutcomeFile is the file name of the protocol of a testcase that ended, with no extension: its outcome ok,
+// partial or failed (section 10) in the name by ProtocolOutcomeName.
 func ProtocolOutcomeFile(tc *TestCase) string {
-	name := protocolFileName(CaseName(tc))
-	o := protocolOutcome(tc)
-	if o == "" {
-		return name
+	return ProtocolOutcomeName(CaseName(tc), protocolOutcome(tc))
+}
+
+// ProtocolOutcomeName is the file name of the protocol of the testcase named name with the outcome o, with no
+// extension: o between the row id and the rest of the name, <row id>-<o>-<rest>, or first, <o>-<name>, when the name
+// has no row id. Every protocol carries an outcome: a testcase that did not end is named with ProtocolOutcomeFailed.
+func ProtocolOutcomeName(name, o string) string {
+	n := protocolFileName(name)
+	id := protocolRowID.FindString(n)
+	if id == "" || id == n {
+		return strings.TrimSuffix(o+"-"+n, "-")
 	}
-	id := protocolRowID.FindString(name)
-	if id == "" || id == name {
-		return strings.TrimSuffix(o+"-"+name, "-")
-	}
-	return id + "-" + o + strings.TrimPrefix(name, id)
+	return id + "-" + o + strings.TrimPrefix(n, id)
 }
 
 // CaseName is the testcase name as written in the testsuite; Venom runs it under its slug.
