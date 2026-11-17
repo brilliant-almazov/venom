@@ -15,7 +15,7 @@ func (l layout) writeSystem() error {
 	b.WriteString("# Scheme of the system\n\n")
 	fmt.Fprintf(&b, "- verdict: %s\n- testcases: %s\n- run: %s · %s · %s\n\n", c.mark(), c, link(IndexFile, base, l.index()),
 		link(ReportFile, base, l.report()), link(ProblemsFile, base, l.problems()))
-	b.WriteString("```text\nsystem · " + c.mark() + "\n")
+	b.WriteString("```text\nsystem · " + c.mark() + " · " + c.share() + "\n")
 
 	for i, folder := range l.order {
 		branch, indent := branchMid, indentMid
@@ -25,7 +25,7 @@ func (l layout) writeSystem() error {
 		}
 
 		rows := l.rowsOf(folder)
-		b.WriteString(branch + l.names[folder] + " · " + countOf(rows).mark() + "\n")
+		b.WriteString(branch + l.names[folder] + " · " + countOf(rows).mark() + " · " + countOf(rows).share() + "\n")
 		drawCases(&b, indent, rows)
 	}
 
@@ -61,7 +61,7 @@ func (l layout) writePath(name string) error {
 	fmt.Fprintf(&b, "# Scheme of the path %s\n\n", name)
 	fmt.Fprintf(&b, "- folder: `%s`\n- verdict: %s\n- testcases: %s\n- system: %s · %s\n\n", folder, c.mark(), c,
 		link(SystemFile, base, l.systemScheme()), link(IndexFile, base, l.index()))
-	b.WriteString("```text\n" + name + " · " + c.mark() + "\n")
+	b.WriteString("```text\n" + name + " · " + c.mark() + " · " + c.share() + "\n")
 	drawCases(&b, "", rows)
 	b.WriteString("```\n\n")
 	l.checkedCases(&b, base, rows)

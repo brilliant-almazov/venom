@@ -8,7 +8,7 @@ import (
 )
 
 // indexHeader is the table of protocols/INDEX.md, one row per testcase.
-const indexHeader = "| suite | testcase | verdict | trace | link | scenario | scheme |\n| -- | -- | -- | -- | -- | -- | -- |\n"
+const indexHeader = "| suite | testcase | verdict | trace | link | scenario | scheme | path |\n| -- | -- | -- | -- | -- | -- | -- | -- |\n"
 
 // noTree is the trace cell of a call whose trace id has no span tree in Tempo.
 const noTree = "trace not saved"
@@ -36,7 +36,16 @@ func (l layout) writeIndex() error {
 	var b strings.Builder
 	b.WriteString("# Protocols\n\n")
 	b.WriteString(link(ReportFile, base, l.report()) + " · " + link(ProblemsFile, base, l.problems()) + " · " +
-		link(SystemFile, base, l.systemScheme()) + "\n\n" + indexHeader)
+		link(SystemFile, base, l.systemScheme()) + "\n\n")
+
+	for _, folder := range l.order {
+		name := l.names[folder]
+		pc := countOf(l.rowsOf(folder))
+		fmt.Fprintf(&b, "- path %s · %s · %s\n", link(name, base, l.pathScheme(name)), pc.mark(), pc.share())
+	}
+
+	c := countOf(l.rows)
+	fmt.Fprintf(&b, "- system %s · %s · %s\n\n%s", link(SystemFile, base, l.systemScheme()), c.mark(), c.share(), indexHeader)
 
 	for _, r := range l.rows {
 		protocol := noValue
@@ -45,8 +54,10 @@ func (l layout) writeIndex() error {
 			protocol = link(protocolLink, base, r.protocol)
 		}
 
-		fmt.Fprintf(&b, "| %s | %s | %s | %s | %s | %s | %s |\n", cell(r.suite), cell(r.testcase), verdictOf(r),
-			traceCell(base, r), protocol, scenarioLink(base, r, r.view.Line), link(wordScheme, base, l.caseScheme(r)))
+		path := l.pathOf(r)
+		fmt.Fprintf(&b, "| %s | %s | %s | %s | %s | %s | %s | %s |\n", cell(r.suite), cell(r.testcase), verdictOf(r),
+			traceCell(base, r), protocol, scenarioLink(base, r, r.view.Line), link(wordScheme, base, l.caseScheme(r)),
+			link(cell(path), base, l.pathScheme(path)))
 	}
 
 	return writeFile(l.index(), []byte(b.String()))
