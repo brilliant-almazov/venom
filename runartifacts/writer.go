@@ -41,8 +41,10 @@ const (
 	reasonNotStarted = "the run ended before the testcase started"
 )
 
-// fetchWait is how long a span tree missing from the trace folders is waited for in Tempo.
-const fetchWait = 10 * time.Second
+// fetchWait is how long a span tree missing from the trace folders is waited for in Tempo before the verdict: as long
+// as the late fetch of the tempo executor, so a trace Tempo ingests late is in the protocol (run 17-12, SB-05-01: the
+// tree of the monolith webhook call came after 10 s, the protocol said «trace not saved»).
+var fetchWait = tempo.LateWait
 
 // Writer is the run artifacts writer of one run folder.
 type Writer struct {
@@ -128,6 +130,7 @@ func (w *Writer) BeforeVerdict(ctx context.Context, _ *venom.TestSuite, tc *veno
 	url := venom.TempoURL(tc)
 
 	if url == "" {
+		venom.Error(ctx, "no Tempo address for traces %v: no step has tempo_url or tempo, nor the vars", ids)
 		return
 	}
 

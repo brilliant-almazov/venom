@@ -389,8 +389,9 @@ func protocolBody(r *TestStepResult) string {
 	return ""
 }
 
-// protocolTrace prints the span tree <trace_dir>/<trace_id>.md of the last call, looked up in every trace_dir and
-// traces the steps of the testcase were given.
+// protocolTrace prints the span tree <trace_dir>/<trace_id>.md of the last call, then the tree of every other step
+// with a trace id of its own («трэйсы долнжы бытиь в протоколах»), looked up in every trace_dir and traces the steps
+// of the testcase were given.
 func protocolTrace(tc *TestCase, call *TestStepResult) string {
 	if call == nil {
 		return "- " + protocolNoTrace + ": the testcase has no call\n"
@@ -399,7 +400,17 @@ func protocolTrace(tc *TestCase, call *TestStepResult) string {
 	if id == "" {
 		return protocolStepTraces(tc)
 	}
-	return protocolTree(tc, id)
+	var b strings.Builder
+	b.WriteString(protocolTree(tc, id))
+	seen := map[string]bool{id: true}
+	for i := range tc.TestStepResults {
+		r := &tc.TestStepResults[i]
+		if sid := protocolTraceID(r); sid != "" && !seen[sid] && protocolHasCode(r) {
+			seen[sid] = true
+			fmt.Fprintf(&b, "\n"+protocolStepLine+"\n%s", i+1, r.Name, protocolTree(tc, sid))
+		}
+	}
+	return b.String()
 }
 
 func protocolStepTraces(tc *TestCase) string {
