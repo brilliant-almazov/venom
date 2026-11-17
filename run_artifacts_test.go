@@ -140,3 +140,32 @@ testcases:
 		assert.Contains(t, view.Text, want)
 	}
 }
+
+// The protocol of a testcase that ended carries its outcome in the file name: ok, partial or failed; a skipped testcase
+// keeps its name alone (run 17-9: «где статус прогона в нахвание файла протокла?»).
+func TestProtocolOutcomeFile(t *testing.T) {
+	applied := func(ok ...bool) TestStepResult {
+		var r TestStepResult
+		for _, o := range ok {
+			r.AssertionsApplied.Assertions = append(r.AssertionsApplied.Assertions, AssertionApplied{IsOK: o})
+		}
+		return r
+	}
+	tc := func(status Status, steps ...TestStepResult) *TestCase {
+		c := &TestCase{TestCaseInput: TestCaseInput{Name: "sb-01-01-webhook"}, Status: status, TestStepResults: steps}
+		c.originalName = "SB-01-01 webhook"
+		return c
+	}
+
+	assert.Equal(t, "SB-01-01-ok-webhook", ProtocolOutcomeFile(tc(StatusPass, applied(true))))
+	assert.Equal(t, "SB-01-01-partial-webhook", ProtocolOutcomeFile(tc(StatusFail, applied(true, false))))
+	assert.Equal(t, "SB-01-01-failed-webhook", ProtocolOutcomeFile(tc(StatusFail, applied(false))))
+	assert.Equal(t, "SB-01-01-webhook", ProtocolOutcomeFile(tc(StatusSkip)))
+
+	noRowID := tc(StatusPass, applied(true))
+	noRowID.originalName = "webhook answers 200"
+	assert.Equal(t, "ok-webhook-answers-200", ProtocolOutcomeFile(noRowID))
+	long := tc(StatusFail, applied(false))
+	long.originalName = "SB-01-01 POST webhook of a known integration answers 200 and a string id"
+	assert.Equal(t, "SB-01-01-failed-POST-webhook-of-a-known-integration-answers-200-and-a-string-id", ProtocolOutcomeFile(long))
+}

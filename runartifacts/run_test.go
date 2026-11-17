@@ -92,10 +92,10 @@ func TestRunOfEveryOutcome(t *testing.T) {
 	dir := filepath.Join(run, ProtocolsDir, "sb-02-01-outcomes")
 
 	for name, want := range map[string]string{
-		"SB-02-01-01-green":   "✅ passed",
-		"SB-02-01-02-should":  "❌ failed",
-		"SB-02-01-03-must":    "❌ failed",
-		"SB-02-01-04-skipped": "⏭ skipped",
+		"SB-02-01-01-ok-green":      "✅ passed",
+		"SB-02-01-02-failed-should": "❌ failed",
+		"SB-02-01-03-failed-must":   "❌ failed",
+		"SB-02-01-04-skipped":        "⏭ skipped",
 	} {
 		body, err := os.ReadFile(filepath.Join(dir, name+".md"))
 		require.NoError(t, err, name)
@@ -103,6 +103,11 @@ func TestRunOfEveryOutcome(t *testing.T) {
 		assert.Contains(t, string(body), "SB-02-01-outcomes.yml:", name)
 		assert.Contains(t, string(body), "../../schemes/rows/", name)
 		assert.NotContains(t, string(body), apiKey, name)
+	}
+
+	// one protocol per testcase: the name carries ok, partial or failed after the row id, the one written as the testcase began is gone
+	for _, name := range []string{"SB-02-01-01-green", "SB-02-01-02-should", "SB-02-01-03-must"} {
+		assert.NoFileExists(t, filepath.Join(dir, name+".md"))
 	}
 
 	must := readRun(t, run, "schemes/rows/SB-02-01-03-must.md")
