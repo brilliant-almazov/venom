@@ -147,9 +147,9 @@ func TestSchemeBarsAfterEveryTestcase(t *testing.T) {
 
 	body, err := os.ReadFile(filepath.Join(run, SchemesDir, "SYSTEM.md"))
 	require.NoError(t, err)
-	assert.Equal(t, "billing [██████████░░░░░░░░░░] 50 %  ⏸ 1/2\n"+
+	assert.Equal(t, "billing [██████████··········] 50 %  ⏸ 1/2\n"+
 		"├─ BL-01-01 [████████████████████] 100 %  ✅ 201\n"+
-		"└─ BL-01-02 [░░░░░░░░░░░░░░░░░░░░] 0 %  ⏸ pending\n", string(body))
+		"└─ BL-01-02 [····················] 0 %  ⏸ pending\n", string(body))
 
 	w.Testcase(ctx, ts, &ts.TestCases[1])
 	require.NoError(t, w.Finish(ctx, &venom.Tests{}))
@@ -225,7 +225,7 @@ func TestLiveSchemeNextToRuns(t *testing.T) {
 	w.Plan(&venom.Tests{TestSuites: []venom.TestSuite{*ts}})
 	w.Testcase(ctx, ts, &ts.TestCases[0])
 
-	assert.Equal(t, "gateway ⟦SB-01 SB-02:bar⟧⟪[██████████░░░░░░░░░░] 50 %  ⏸ 1/2⟫\n├─ ⟦SB-01⟧⟪✅ 200⟫\n└─ ⟦SB-02⟧⟪⏸⟫\n",
+	assert.Equal(t, "gateway ⟦SB-01 SB-02:bar⟧⟪[██████████··········] 50 %  ⏸ 1/2⟫\n├─ ⟦SB-01⟧⟪✅ 200⟫\n└─ ⟦SB-02⟧⟪⏸⟫\n",
 		read(live))
 
 	w.Testcase(ctx, ts, &ts.TestCases[1])

@@ -90,7 +90,7 @@ func TestWritePlan(t *testing.T) {
 
 	run := read(ZoomRunFile)
 	assert.Contains(t, run, "# Scheme\n")
-	assert.Contains(t, run, "scheme  [██░░░░░░░░░░░░░░░░░░] 10 %  ❌ 1/10")
+	assert.Contains(t, run, "scheme  [██░░················] 10 %  ❌ 1/10")
 	assert.Contains(t, run, "testsuite SB-01 accounts  [██████████░░░░░░░░░░] 50 %  ❌ 1/2")
 	assert.Contains(t, run, "testsuite SB-02 ledger  no run  ⏸ 0/8")
 	assert.Contains(t, run, "2026-11/17-13  [██████████░░░░░░░░░░] 50 %  ❌ 1/2")

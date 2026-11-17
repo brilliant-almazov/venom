@@ -114,7 +114,7 @@ func TestRunOfEveryOutcome(t *testing.T) {
 		"SB-02-01-01-ok-green":       "✅ passed",
 		"SB-02-01-02-failed-should":  "❌ failed",
 		"SB-02-01-03-failed-must":    "❌ failed",
-		"SB-02-01-04-failed-skipped": "⏭ skipped",
+		"SB-02-01-04-not-run-skipped": "⏭ skipped",
 		"SB-02-01-05-partial-half":   "❌ failed",
 	} {
 		body, err := os.ReadFile(filepath.Join(dir, name+".md"))
@@ -125,13 +125,13 @@ func TestRunOfEveryOutcome(t *testing.T) {
 		assert.NotContains(t, string(body), apiKey, name)
 	}
 
-	// one protocol per testcase: the name carries ok, partial or failed after the row id, the one written as the testcase began is gone
+	// one protocol per testcase: the name carries ok, partial, failed or not-run after the row id, the one written as the testcase began is gone
 	protocols, err := os.ReadDir(dir)
 	require.NoError(t, err)
 	require.Len(t, protocols, 5)
 
 	for _, p := range protocols {
-		assert.Regexp(t, `^SB-02-01-0[1-5]-(ok|partial|failed)-[a-z]+\.md$`, p.Name())
+		assert.Regexp(t, `^SB-02-01-0[1-5]-(ok|partial|failed|not-run)-[a-z]+\.md$`, p.Name())
 	}
 
 	green := readRun(t, run, "protocols/SB-02-01-partial-outcomes/SB-02-01-01-ok-green.md")
@@ -152,12 +152,12 @@ func TestRunOfEveryOutcome(t *testing.T) {
 		assert.Contains(t, problems, "| "+name+" |")
 	}
 
-	// the protocols folder of the testsuite carries its outcome: one ok, one partial, three failed is partial
+	// the protocols folder of the testsuite carries its outcome: one ok, one partial, two failed, one not-run is partial
 	assert.NoDirExists(t, filepath.Join(run, ProtocolsDir, "SB-02-01-failed-outcomes"))
 	assert.NoDirExists(t, filepath.Join(run, ProtocolsDir, "SB-02-01-ok-outcomes"))
 
 	// the shares of the outcomes in %: by the run, the testsuite and the path, next to the count of testcases
-	const share = "5 testcases · ✅ 1 · ❌ 3 · ⏸ 1 · ok 20% · partial 20% · failed 60%"
+	const share = "5 testcases · ✅ 1 · ❌ 3 · ⏸ 1 · ok 20% · partial 20% · failed 40% · not-run 20%"
 	report := readRun(t, run, ReportFile)
 	assert.Contains(t, report, "- verdict: ❌ 1/5")
 	assert.Contains(t, report, "- testcases: "+share+"\n")
@@ -166,22 +166,22 @@ func TestRunOfEveryOutcome(t *testing.T) {
 
 	// every slice of the scheme — system, path, case — with its verdict and share, linked from REPORT.md, INDEX.md and
 	// each protocol
-	assert.Contains(t, report, "| system | [SYSTEM.md](schemes/SYSTEM.md) | ❌ 1/5 | ok 20% · partial 20% · failed 60% |")
-	assert.Contains(t, report, "| path | [rows](schemes/rows/PATH.md) | ❌ 1/5 | ok 20% · partial 20% · failed 60% |")
+	assert.Contains(t, report, "| system | [SYSTEM.md](schemes/SYSTEM.md) | ❌ 1/5 | ok 20% · partial 20% · failed 40% · not-run 20% |")
+	assert.Contains(t, report, "| path | [rows](schemes/rows/PATH.md) | ❌ 1/5 | ok 20% · partial 20% · failed 40% · not-run 20% |")
 	assert.Contains(t, report, "| case | [SB-02-01-05 half](schemes/rows/SB-02-01-05-half.md) | ❌ 409 | ✅ 0% · ❌ 100% · ⏸ 0% |")
 	assert.Contains(t, report, "| case | [SB-02-01-03 must](schemes/rows/SB-02-01-03-must.md) | ❌ 500 | ✅ 0% · ❌ 50% · ⏸ 50% |")
 
 	index := readRun(t, run, "protocols/INDEX.md")
-	assert.Contains(t, index, "- path [rows](../schemes/rows/PATH.md) · ❌ 1/5 · ok 20% · partial 20% · failed 60%")
-	assert.Contains(t, index, "- system [SYSTEM.md](../schemes/SYSTEM.md) · ❌ 1/5 · ok 20% · partial 20% · failed 60%")
+	assert.Contains(t, index, "- path [rows](../schemes/rows/PATH.md) · ❌ 1/5 · ok 20% · partial 20% · failed 40% · not-run 20%")
+	assert.Contains(t, index, "- system [SYSTEM.md](../schemes/SYSTEM.md) · ❌ 1/5 · ok 20% · partial 20% · failed 40% · not-run 20%")
 	assert.Contains(t, index, "[scheme](../schemes/rows/SB-02-01-05-half.md) | [rows](../schemes/rows/PATH.md) |")
 
 	system := readRun(t, run, "schemes/SYSTEM.md")
-	assert.Contains(t, system, "system · ❌ 1/5 · ok 20% · partial 20% · failed 60%")
-	assert.Contains(t, system, "└─ rows · ❌ 1/5 · ok 20% · partial 20% · failed 60%")
+	assert.Contains(t, system, "system · ❌ 1/5 · ok 20% · partial 20% · failed 40% · not-run 20%")
+	assert.Contains(t, system, "└─ rows · ❌ 1/5 · ok 20% · partial 20% · failed 40% · not-run 20%")
 	assert.Contains(t, system, "- testcases: "+share)
 	path := readRun(t, run, "schemes/rows/PATH.md")
-	assert.Contains(t, path, "rows · ❌ 1/5 · ok 20% · partial 20% · failed 60%")
+	assert.Contains(t, path, "rows · ❌ 1/5 · ok 20% · partial 20% · failed 40% · not-run 20%")
 	assert.Contains(t, path, "- testcases: "+share)
 	assert.Contains(t, path, "[protocol](../../protocols/SB-02-01-partial-outcomes/SB-02-01-05-partial-half.md)")
 	half := readRun(t, run, "schemes/rows/SB-02-01-05-half.md")

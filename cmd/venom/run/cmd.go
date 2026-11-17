@@ -208,6 +208,8 @@ type ConfigFileData struct {
 	Secrets        *[]string `json:"secrets,omitempty" yaml:"secrets,omitempty"`
 	VariablesFiles *[]string `json:"variables_files,omitempty" yaml:"variables_files,omitempty"`
 	Verbosity      *int      `json:"verbosity,omitempty" yaml:"verbosity,omitempty"`
+	// Outcomes are the testcase outcomes written in the protocol names; without the key, those of venomrc.base.yaml.
+	Outcomes       *[]string `json:"outcomes,omitempty" yaml:"outcomes,omitempty"`
 }
 
 // Configuration file overrides the environment variables.
@@ -264,6 +266,11 @@ func initFromReaderConfigFile(reader io.Reader) error {
 	}
 	if configFileData.Verbosity != nil {
 		verbose = *configFileData.Verbosity
+	}
+	if configFileData.Outcomes != nil {
+		if err := venom.SetProtocolOutcomes(*configFileData.Outcomes); err != nil {
+			return errors.Wrap(err, ".venomrc outcomes")
+		}
 	}
 
 	return nil

@@ -10,10 +10,11 @@ import (
 )
 
 // count is how many testcases passed, failed and did not pass or fail (skipped, interrupted, not run, pending), and
-// how many protocols are ok, partial and failed; unrun are those of a scheme with no run that no earlier run has.
+// how many protocols are ok, partial, failed and not-run; unrun are those of a scheme with no run that no earlier run
+// has.
 type count struct {
 	all, passed, failed, other int
-	ok, partial, notOK         int
+	ok, partial, notOK, notRun int
 	unrun                      int
 }
 
@@ -28,8 +29,11 @@ func countOf(rows []row) count {
 		case venom.ProtocolOutcomePartial:
 			c.partial++
 
-		default:
+		case venom.ProtocolOutcomeFailed:
 			c.notOK++
+
+		default:
+			c.notRun++
 		}
 
 		if r.state == stateNoRun {
@@ -70,10 +74,12 @@ func (c count) String() string {
 		venom.MarkNotRun, c.other, c.share())
 }
 
-// share is the share of the protocols ok, partial and failed in %: ok 50% · partial 25% · failed 25%.
+// share is the share of the protocols ok, partial, failed and not-run in %: ok 50% · partial 25% · failed 25% ·
+// not-run 0%.
 func (c count) share() string {
-	return fmt.Sprintf("%s %s · %s %s · %s %s", venom.ProtocolOutcomeOK, percent(c.ok, c.all), venom.ProtocolOutcomePartial,
-		percent(c.partial, c.all), venom.ProtocolOutcomeFailed, percent(c.notOK, c.all))
+	return fmt.Sprintf("%s %s · %s %s · %s %s · %s %s", venom.ProtocolOutcomeOK, percent(c.ok, c.all),
+		venom.ProtocolOutcomePartial, percent(c.partial, c.all), venom.ProtocolOutcomeFailed, percent(c.notOK, c.all),
+		venom.ProtocolOutcomeNotRun, percent(c.notRun, c.all))
 }
 
 // percent is n of all in whole %, 0% of none.

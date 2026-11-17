@@ -1,0 +1,12 @@
+# The base configuration of Venom: what a run takes when neither the .venomrc of the folder nor that of the home sets
+# the key. A key set in a .venomrc replaces the base value as a whole.
+
+# outcomes are the testcase outcomes written in the names of the protocols and of their testsuite folders, any of
+# ok, partial, failed, not-run: ok passed, partial failed with an assertion held, failed failed with none held, not-run
+# did not run or has not ended (skipped, interrupted, never started, pending), never failed. An outcome left out is not
+# written: its protocol and folder carry the name alone.
+outcomes:
+  - ok
+  - partial
+  - failed
+  - not-run
