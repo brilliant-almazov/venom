@@ -29,7 +29,9 @@ const (
 	protocolMethodLine     = "- method: "
 	protocolMasked         = "*** (%d chars)"
 	protocolNoTrace        = "no trace"
-	protocolNoTree         = "- no tree:"
+	protocolNoTree         = "- trace not saved:"
+	protocolDBReadLine     = "- db read: step %d \"%s\" %s"
+	protocolNoDBRead       = "no database read in the testcase"
 	protocolWaitLine       = "- wait: step %d, %s s, %s"
 	protocolNoReason       = "no reason given"
 )

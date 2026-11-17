@@ -188,6 +188,9 @@ func (v *Venom) runOneTestCase(ctx context.Context, ts *TestSuite, tc *TestCase)
 	} else if tc.Status != StatusSkip {
 		tc.Status = StatusPass
 	}
+	if v.Artifacts != nil {
+		v.Artifacts.BeforeVerdict(ctx, ts, tc)
+	}
 	traceGate(tc)
 	hasFailure = tc.Status == StatusFail
 	v.writeProtocol(ctx, ts, tc)
@@ -255,6 +258,9 @@ func (v *Venom) parseTestCases(ts *TestSuite) ([]string, []string, error) {
 	for i := range ts.TestCases {
 		tc := &ts.TestCases[i]
 		if v.DryRun {
+			if err := dryRunTestCaseForm(ts, tc); err != nil {
+				return nil, nil, err
+			}
 			if err := dryRunTestCase(ts, tc, earlier); err != nil {
 				return nil, nil, err
 			}

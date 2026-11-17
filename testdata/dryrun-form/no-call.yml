@@ -1,0 +1,10 @@
+name: no call
+testcases:
+- name: S-049 snapshot of the condition
+  steps:
+  - type: check
+    value: '200'
+    assertions:
+    - result.value ShouldEqual 200
+  - type: wait
+    seconds: 0

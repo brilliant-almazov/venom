@@ -78,6 +78,8 @@ type Venom struct {
 	ParallelSuites int
 	// ProtocolDir, when set, receives one protocol file per testcase, whatever its outcome (protocol.go).
 	ProtocolDir string
+	// Artifacts, when set, receives every testcase of the run and the run once it ends (run_artifacts.go).
+	Artifacts RunArtifacts
 	// DryRun loads and checks the testsuites with no step run (dryrun.go).
 	DryRun bool
 }

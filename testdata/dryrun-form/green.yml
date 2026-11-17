@@ -1,0 +1,27 @@
+name: call, trace_save, then Must
+testcases:
+- name: Setup pair and currency read back
+  steps:
+  - type: check
+    value: 'x'
+    assertions:
+    - result.value MustNotEqual ""
+  - type: caller
+    code: 200
+- name: S-068 currency
+  steps:
+  - type: caller
+    code: 200
+    vars:
+      call_status:
+        from: result.body
+  - type: trace_save
+    trace_id: '{{.call_status}}'
+  - type: check
+    value: '{{.call_status}}'
+    assertions:
+    - result.value MustEqual 200
+- name: TEARDOWN back to preflight
+  steps:
+  - type: wait
+    seconds: 0

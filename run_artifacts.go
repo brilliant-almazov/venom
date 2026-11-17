@@ -1,0 +1,95 @@
+package venom
+
+import (
+	"context"
+	"fmt"
+)
+
+// RunArtifacts lays the artifacts of a run out in a folder of its own (package runartifacts, --run-dir): it sees each
+// testcase before its trace gate, so a span tree missing from the trace folders can be fetched from Tempo, then once its
+// status is known, whatever the outcome, and the run once it ends.
+type RunArtifacts interface {
+	BeforeVerdict(ctx context.Context, ts *TestSuite, tc *TestCase)
+	Testcase(ctx context.Context, ts *TestSuite, tc *TestCase)
+	Finish(ctx context.Context, tests *Tests) error
+}
+
+// Marks of a testcase or a hop: passed, failed, not run (skipped, or never reached).
+const (
+	MarkPassed = "✅"
+	MarkFailed = "❌"
+	MarkNotRun = "⏸"
+)
+
+// ProtocolView is what a run artifacts writer takes from one testcase: the protocol text and the facts of its call and
+// its hops.
+type ProtocolView struct {
+	// Name is the testcase name as written, row id first.
+	Name    string
+	Text    string
+	Mark    string
+	Code    string
+	TraceID string
+	// TraceFile is the saved span tree <dir>/<trace_id>.md of the call, empty when none was saved.
+	TraceFile string
+	// Trees are the saved span trees of every traced step by trace id, the call's among them.
+	Trees  map[string]string
+	Reason string
+	// Hops are the steps with an info line "hop: <key>" by key.
+	Hops map[string]HopView
+}
+
+// HopView is one hop of a testcase: the step that carries "hop: <key>".
+type HopView struct {
+	Mark, Code, TraceID, Reason string
+}
+
+// AddTraceDir adds a folder the span trees of the testcase are looked up in, next to the trace_dir and traces of its steps.
+func (tc *TestCase) AddTraceDir(dir string) {
+	tc.traceDirs = append(tc.traceDirs, dir)
+}
+
+// TracesWithoutTree are the trace ids of the traced calls of the testcase whose span tree is in no trace folder.
+func TracesWithoutTree(tc *TestCase) []string {
+	var ids []string
+	seen := map[string]bool{}
+	for i := range tc.TestStepResults {
+		r := &tc.TestStepResults[i]
+		id := protocolTraceID(r)
+		if id == "" || !protocolHasCode(r) || seen[id] {
+			continue
+		}
+		seen[id] = true
+		if f, _ := protocolTreeFile(tc, id); f == "" {
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
+// TempoURL is the tempo_url of the first step that has one, else the var tempo_url of the testcase.
+func TempoURL(tc *TestCase) string {
+	for i := range tc.TestStepResults {
+		if u := protocolField(protocolStep(&tc.TestStepResults[i])["tempo_url"]); u != "" {
+			return u
+		}
+	}
+	if u, ok := tc.Vars["tempo_url"]; ok && u != nil {
+		return fmt.Sprint(u)
+	}
+	return ""
+}
+
+// ProtocolFileName is the file name of the protocol of a testcase named name, with no extension.
+func ProtocolFileName(name string) string {
+	return protocolFileName(name)
+}
+
+// CaseName is the testcase name as written in the testsuite; Venom runs it under its slug.
+func CaseName(tc *TestCase) string {
+	if tc.originalName != "" {
+		return tc.originalName
+	}
+
+	return tc.Name
+}

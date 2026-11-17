@@ -19,6 +19,7 @@ import (
 	"github.com/ovh/venom"
 	"github.com/ovh/venom/executors"
 	"github.com/ovh/venom/interpolate"
+	"github.com/ovh/venom/runartifacts"
 )
 
 var (
@@ -32,6 +33,7 @@ var (
 	outputDir      string
 	libDir         string
 	protocolDir    string
+	runDir         string
 	htmlReport     bool
 	stopOnFailure  bool
 	dryRun         bool
@@ -45,6 +47,7 @@ var (
 	outputDirFlag      *string
 	libDirFlag         *string
 	protocolDirFlag    *string
+	runDirFlag         *string
 	stopOnFailureFlag  *bool
 	dryRunFlag         *bool
 	parallelFlag       *int
@@ -57,7 +60,8 @@ func init() {
 	formatFlag = Cmd.Flags().String("format", "xml", "--format:json, tap, xml, yaml")
 	stopOnFailureFlag = Cmd.Flags().Bool("stop-on-failure", false, "Stop running Test Suite on first Test Case failure")
 	dryRunFlag = Cmd.Flags().Bool("dry-run", false, "Load every testsuite and run no step: parse the YAML, load the user executors, resolve every step type "+
-		"to an executor and check every {{.var}} of a step is set by the vars, an earlier step or an earlier testcase. "+
+		"to an executor and check every {{.var}} of a step is set by the vars, an earlier step or an earlier testcase, and that a testcase other than setup or teardown holds a call step "+
+		"with no Must... assertion before it. "+
 		"The first failure is printed as <file>:<line> and the exit code is 2; nothing touches the network")
 	parallelFlag = Cmd.Flags().Int("parallel", 1, "Run up to N testcases of one testsuite at once, 1 is sequential. "+
 		"A testsuite runs sequentially when --stop-on-failure is set or when a testcase references a var exported by an earlier testcase "+
@@ -73,6 +77,7 @@ func init() {
 	outputDirFlag = Cmd.PersistentFlags().String("output-dir", "", "Output Directory: create tests results file inside this directory")
 	libDirFlag = Cmd.PersistentFlags().String("lib-dir", "", "Lib Directory: can contain user executors. example:/etc/venom/lib:$HOME/venom.d/lib")
 	protocolDirFlag = Cmd.PersistentFlags().String("protocol-dir", "", "Protocol Directory: one <testsuite>/<testcase>.md per testcase, whatever its outcome — expected and wrong behaviour from the info lines, the last call, its span tree, the verdict with every failed assertion. Env: VENOM_PROTOCOL_DIR")
+	runDirFlag = Cmd.PersistentFlags().String("run-dir", "", "Run Directory: protocols/<testsuite>/<testcase>.md, protocols/traces/<trace_id>.md and protocols/INDEX.md; schemes, the schemes folder of the testsuite set with its anchors filled; raw, every other output (it replaces --output-dir)")
 }
 
 func initArgs(cmd *cobra.Command) {
@@ -131,6 +136,10 @@ func initFromCommandArguments(f *pflag.Flag) {
 	case "protocol-dir":
 		if protocolDirFlag != nil {
 			protocolDir = *protocolDirFlag
+		}
+	case "run-dir":
+		if runDirFlag != nil {
+			runDir = *runDirFlag
 		}
 	case "verbose":
 		if verboseFlag != nil {
@@ -398,6 +407,12 @@ var Cmd = &cobra.Command{
 
 		v.OutputDir = outputDir
 		v.ProtocolDir = protocolDir
+		var artifacts *runartifacts.Writer
+		if runDir != "" {
+			artifacts = runartifacts.New(runDir)
+			v.Artifacts = artifacts
+			v.OutputDir = artifacts.RawPath()
+		}
 		v.LibDir = libDir
 		v.OutputFormat = format
 		v.StopOnFailure = stopOnFailure
@@ -474,6 +489,13 @@ var Cmd = &cobra.Command{
 		if err := v.OutputResult(); err != nil {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
 			venom.OSExit(2)
+		}
+
+		if artifacts != nil {
+			if err := artifacts.Finish(context.Background(), &v.Tests); err != nil {
+				fmt.Fprintf(os.Stderr, "%v\n", err)
+				venom.OSExit(2)
+			}
 		}
 
 		if v.Tests.Status == venom.StatusPass {

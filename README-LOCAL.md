@@ -564,6 +564,68 @@ testcases, K steps, U user executors loaded; every executor resolved, every var 
 `TestDryRunVarOfLaterStep`, `TestDryRunUnknownExecutorNamedByLine`, `TestDryRunUnknownExecutorInLib`,
 `TestDryRunUnparseableYAMLNamedByLine`.
 
+## 30. A testcase that can end with no call fails the dry run
+
+Stock executors checked: none apply - this is a dry-run form check, not an executor.
+
+Run 16-6 wrote 16 protocols with «no trace: the testcase has no call»: the testcase opened with `type: check` steps
+asserting `Must…` on the inputs of its setup, a failed `Must…` stopped it before the call. `venom run --dry-run` now
+checks the form of every testcase on the parsed YAML, before the templates are filled:
+
+- the testcase holds a call step: a step whose `type` is not `check`, `wait` or `trace_save` (http, grpc, sql, amqp,
+  rabbitmq, tempo, s3, a user executor, …); a testcase with none fails as
+  `<file>:<line>: testcase "<name>": testcase has no call step`, the line of the testcase;
+- no step before the first call asserts `Must…` in its `assertions:`; one that does fails as
+  `<file>:<line>: testcase "<name>": step N asserts <MustOperator> before the first call`, the line of the step.
+
+A testcase whose name starts with `setup` or `teardown` (any case) and every file under `scenarios/preflight/` are not
+checked. A failure exits 2 as every dry run failure. Point tests: `TestDryRunTestCaseWithNoCall`,
+`TestDryRunMustBeforeCall`, `TestDryRunCallThenMustGreen`, `TestDryRunPreflightNotChecked`, files of
+`testdata/dryrun-form/`.
+
+## 31. A run laid out in one folder: `--run-dir`
+
+`venom run --run-dir <run>` writes the run with no copy or packing by hand (package `runartifacts`):
+
+| Path | What |
+| -- | -- |
+| `<run>/protocols/<testsuite>/<testcase>.md` | the protocol of section 10 for every testcase, whatever its outcome, named by the testcase name as written |
+| `<run>/protocols/traces/<trace_id>.md` | the span tree of every traced call of the run (section 13), secrets hidden |
+| `<run>/protocols/INDEX.md` | one row per testcase in testsuite file order: `suite`, `testcase`, `verdict` (✅/❌/⏸ and the answer code), `trace` (a link to the tree, `trace not saved <trace_id>`, or `—` for a call with no trace), `link` to the protocol |
+| `<run>/schemes/` | the `schemes/` folder of the testsuite set with every anchor filled (below) |
+| `<run>/raw/` | every other output of Venom: the reports, `venom.log`, dumps, `io.jsonl` (section 28), the traces fetched from Tempo; `--run-dir` replaces `--output-dir` |
+
+- A span tree of a traced call that no step saved is fetched from Tempo before the trace gate, by the `tempo_url` of a
+  step of the testcase or its var `tempo_url`, up to 10 s; a trace Tempo does not have makes the line
+  `- trace not saved: <trace_id>: <folders tried>` under Trace and fails the testcase (section 10, `traceGate`).
+- A call that returns no trace id (the monolith) needs no trace: its Trace section lists every `sql` step of the
+  testcase in its place, `- db read: step N "<name>" <status>`, each query and the rows read.
+- A user executor that checks the answer inside itself and fails (an answer that is not 200) still gives its step the
+  result of its inner call — `result.request.*`, `result.statuscode`, `result.body`, `result.headers.*`,
+  `result.trace_id` — and the testcase the trace folders of its inner steps, so the protocol carries the request as
+  sent, the answer and the trace (runs 17-1…17-3 lost them, `keepUserExecutorCall`). The output of an executor that
+  passed is laid over it, its keys win.
+
+Schemes are drawn by the case set, not by Venom: the first `schemes/` folder met going up from a testsuite file, else,
+when the testsuites live apart from the schemes, `<run>/../../../schemes` (a run folder `<set>/runs/<YYYY-MM>/<DD-n>`
+next to `<set>/schemes`), is copied to `<run>/schemes/` file by file, and only its anchors are replaced; the rest of the
+text stays as it is. `<case>` is a testcase name, or the row id its name or the name of its testsuite starts with,
+followed by a space, `-`, `_`, `:`, `·` or `.` (`SB-01-02`); of several testcases of one case the first failed one
+counts. `<hop>` is the key of a step info line `hop: <key>` (`hop: seed-<key>` for a seed step).
+
+| Anchor | Filled with |
+| -- | -- |
+| `⟦<case>⟧` | the verdict of the testcase ✅/❌/⏸, the code of its call, the first 8 characters of its trace id |
+| `⟦<case>:<hop>⟧` | the same of the step with `hop: <hop>`; ⏸ when the step did not run |
+| `⟦<case>:<hop>:reason⟧` | the first failure of that step, `—` when it passed, `not run` when it did not run |
+| `⟦*:<hop>⟧` | the hop over every testcase that has it: ✅ when all passed, else ❌, then passed/all |
+| `⟦<case>:protocol⟧` | a link to the protocol, relative to the scheme file |
+| `⟦<case>:trace⟧` | a link to the span tree, `trace not saved <trace_id>`, or `—` |
+
+A case the run does not have gives ⏸ (`not run` for a reason, `—` for a link). Point tests:
+`runartifacts/writer_test.go` (`TestRunFolder`, `TestSchemesOfTheCaseSet`), `TestUserExecutorCallKeptOnFailure`,
+`TestProtocolDBReadsInPlaceOfTrace`.
+
 ## Build
 
 ```bash

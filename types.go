@@ -177,6 +177,8 @@ type TestCase struct {
 
 	computedVars    H        `json:"-" yaml:"-"`
 	computedVerbose []string `json:"-" yaml:"-"`
+	// traceDirs are the folders a run artifacts writer saved missing span trees to (AddTraceDir).
+	traceDirs []string
 	IsExecutor      bool     `json:"-" yaml:"-"`
 	IsEvaluated     bool     `json:"-" yaml:"-"`
 
