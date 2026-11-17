@@ -76,19 +76,7 @@ func takeRun(r *row, c caseRun) {
 		r.state = stateDone
 	}
 
-	switch {
-	case r.state != stateDone:
-		r.outcome = venom.ProtocolOutcomeNotRun
-
-	case c.ok == 100:
-		r.outcome = venom.ProtocolOutcomeOK
-
-	case c.ok > 0:
-		r.outcome = venom.ProtocolOutcomePartial
-
-	default:
-		r.outcome = venom.ProtocolOutcomeFailed
-	}
+	r.outcome = pastOutcome(c)
 
 	n := len(r.view.Steps)
 	ok, failed := (c.ok*n+50)/100, (c.failed*n+50)/100

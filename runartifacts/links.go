@@ -101,6 +101,7 @@ func (w *Writer) links(r *row) string {
 	fmt.Fprintf(&b, "- scheme of the system: %s\n", link(SystemFile, from, l.systemScheme()))
 	fmt.Fprintf(&b, "- run: %s · %s · %s\n", link(IndexFile, from, l.index()), link(ReportFile, from, l.report()),
 		link(ProblemsFile, from, l.problems()))
+	fmt.Fprintf(&b, "- previous: %s\n", l.dynamicsOf(*r))
 
 	return b.String()
 }

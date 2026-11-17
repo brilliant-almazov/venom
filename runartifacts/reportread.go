@@ -32,11 +32,11 @@ var caseShare = regexp.MustCompile(`(\d+)% · \S+ (\d+)% · \S+ (\d+)%`)
 var caseText = regexp.MustCompile(`^\[(.*)\]\([^)]*\)$`)
 
 // readReport is the past run name as its REPORT.md tells it: the verdict line, the verdict of every path, testsuite
-// and testcase.
+// and testcase, the outcome of every testcase.
 func readReport(name, body string) pastRun {
 	run := pastRun{name: name, paths: map[string]count{}, suites: map[string]count{}, cases: map[string]caseRun{}}
 	var table map[string]count
-	verdict, schemes := "", false
+	verdict, schemes, dynamics := "", false, false
 
 	for _, line := range strings.Split(body, "\n") {
 		switch {
@@ -53,10 +53,14 @@ func readReport(name, body string) pastRun {
 			table = run.suites
 
 		case strings.HasPrefix(line, "## "):
-			table, schemes = nil, strings.HasPrefix(line, headScheme)
+			table, schemes, dynamics = nil, strings.HasPrefix(line, headScheme), strings.HasPrefix(line, headDynamics)
 
 		case schemes && strings.HasPrefix(line, "| "+sliceCase+" |"):
 			readCase(run.cases, splitCells(line))
+
+		case dynamics && strings.HasPrefix(line, "| ") && !strings.HasPrefix(line, "| -- ") &&
+			!strings.HasPrefix(line, "| testcase |"):
+			readDynamics(run.cases, splitCells(line))
 
 		case table != nil && strings.HasPrefix(line, "| ") && !strings.HasPrefix(line, "| -- "):
 			cells := splitCells(line)

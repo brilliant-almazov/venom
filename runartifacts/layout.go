@@ -21,6 +21,8 @@ type layout struct {
 	fileOf   map[string]string
 	// plan: no run made the folder, only the zoom set is in it (WritePlan).
 	plan bool
+	// past are the earlier runs of the set, oldest first, the previous state of every testcase (dynamics.go).
+	past []pastRun
 }
 
 // layout is the run folder of the rows as they stand.
@@ -32,7 +34,7 @@ func (w *Writer) layout() layout {
 	}
 
 	sortRows(rows)
-	l := layout{dir: w.dir, rows: rows, names: map[string]string{}, plan: w.plan}
+	l := layout{dir: w.dir, rows: rows, names: map[string]string{}, plan: w.plan, past: w.history().runs}
 	bases := map[string][]string{}
 
 	for _, r := range rows {

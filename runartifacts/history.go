@@ -23,10 +23,11 @@ type pastRun struct {
 }
 
 // caseRun is a testcase of an earlier run as the Schemes table of its REPORT.md tells it: its verdict mark, its answer
-// code and the share of its steps ok, failed and not run in %.
+// code and the share of its steps ok, failed and not run in %; its outcome as the Dynamics table tells it, empty in a
+// REPORT.md with none.
 type caseRun struct {
-	mark, code        string
-	ok, failed, other int
+	mark, code, outcome string
+	ok, failed, other   int
 }
 
 // pastRuns are the runs of the set before the run folder dir, oldest first: every sibling folder <YYYY-MM>/<DD-n>

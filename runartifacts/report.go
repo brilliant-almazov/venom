@@ -91,13 +91,14 @@ func percent(n, all int) string {
 	return fmt.Sprintf("%d%%", (n*100+all/2)/all)
 }
 
-// writeReport writes REPORT.md: the state of the run, its counts, every path and every trace, with the links.
+// writeReport writes REPORT.md: the state of the run, its counts and their change against the previous run, every
+// path, every testcase against the previous run and every trace, with the links.
 func (l layout) writeReport(w *Writer) error {
 	base := dirOf(l.report())
 	c := countOf(l.rows)
 	var b strings.Builder
 	b.WriteString("# Run report\n\n")
-	fmt.Fprintf(&b, "- verdict: %s · %s\n- testcases: %s\n", c.mark(), progress(c), c)
+	fmt.Fprintf(&b, "- verdict: %s · %s\n- testcases: %s\n%s%s\n", c.mark(), progress(c), c, previousKey, l.previousTotal(c))
 	fmt.Fprintf(&b, "- start: %s\n- end: %s\n", w.start.UTC().Format(time.RFC3339), endOf(w))
 
 	if w.runErr != "" {
@@ -143,6 +144,7 @@ func (l layout) writeReport(w *Writer) error {
 		fmt.Fprintf(&b, "| case | %s | %s | %s |\n", link(cell(r.testcase), base, l.caseScheme(r)), verdictOf(r), stepShare(r))
 	}
 
+	l.writeDynamics(&b)
 	b.WriteString("\n## Traces\n\n| trace id | testcase | span tree |\n| -- | -- | -- |\n")
 
 	for _, r := range l.rows {

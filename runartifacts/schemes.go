@@ -101,7 +101,8 @@ func (w *Writer) fillFolder(src, to string, live bool) error {
 		}
 
 		file := filepath.Join(to, rel)
-		filled := fill{rows: w.layout().rows, from: filepath.Dir(file), live: live}.text(string(body))
+		l := w.layout()
+		filled := fill{rows: l.rows, from: filepath.Dir(file), live: live, past: l.past}.text(string(body))
 
 		return writeFile(file, []byte(filled))
 	})

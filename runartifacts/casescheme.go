@@ -14,8 +14,8 @@ func (l layout) writeCase(r row) error {
 	name := l.pathOf(r)
 	var b strings.Builder
 	fmt.Fprintf(&b, "# Scheme of the case %s\n\n", r.testcase)
-	fmt.Fprintf(&b, "- verdict: %s\n- outcome: %s\n- transitions share: %s\n- path: %s · system: %s\n- scenario: %s\n",
-		verdictOf(r), r.outcome, stepShare(r),
+	fmt.Fprintf(&b, "- verdict: %s\n- outcome: %s\n- transitions share: %s\n- previous: %s\n- path: %s · system: %s\n- scenario: %s\n",
+		verdictOf(r), r.outcome, stepShare(r), l.dynamicsOf(r),
 		link(name, base, l.pathScheme(name)), link(SystemFile, base, l.systemScheme()), scenarioLink(base, r, r.view.Line))
 
 	protocol := noValue
