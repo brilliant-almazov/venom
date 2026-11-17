@@ -14,7 +14,7 @@ func (l layout) graph() ([]*node, []*edge) {
 	for _, r := range l.rows {
 		prev := runner
 
-		for _, s := range r.view.Steps {
+		for _, s := range leavesOf(r.view.Steps) {
 			name, places := placeOf(s)
 			n, ok := nodeAt[name]
 
@@ -62,9 +62,15 @@ func (l layout) zoomSystemText(hist []map[string]count) string {
 	base := l.zoomDir()
 	nodes, edges := l.graph()
 	var b strings.Builder
-	b.WriteString("# System of the run\n\n")
-	fmt.Fprintf(&b, "- testcases: %s\n- zoom: %s · %s\n- scheme: %s\n\n", countOf(l.rows), link(ZoomRunFile, base, l.zoomRun()),
-		link(IndexFile, base, l.zoomIndex()), link(SystemFile, base, l.systemScheme()))
+	fmt.Fprintf(&b, "# System of the %s\n\n", strings.SplitN(l.title(), " ", 2)[0])
+	fmt.Fprintf(&b, "- testcases: %s\n- zoom: %s · %s\n", countOf(l.rows), link(ZoomRunFile, base, l.zoomRun()),
+		link(IndexFile, base, l.zoomIndex()))
+
+	if !l.plan {
+		fmt.Fprintf(&b, "- scheme: %s\n", link(SystemFile, base, l.systemScheme()))
+	}
+
+	b.WriteString("\n")
 
 	lines := []string{runner}
 

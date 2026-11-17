@@ -12,6 +12,8 @@ import (
 const (
 	headPaths  = "## Paths"
 	headSuites = "## Testsuites"
+	headScheme = "## Schemes"
+	sliceCase  = "case"
 	verdictKey = "- verdict: "
 	casesKey   = "- testcases: "
 )
@@ -22,11 +24,18 @@ var tallyOf = regexp.MustCompile(`(\d+)/(\d+)`)
 // sharesOf are the shares of ok, partial and failed of a block: ok 50% · partial 25% · failed 25%.
 var sharesOf = regexp.MustCompile(`ok (\d+)% · partial (\d+)% · failed (\d+)%`)
 
-// readReport is the past run name as its REPORT.md tells it: the verdict line, the verdict of every path and testsuite.
+// caseShare is the share of the steps of a testcase: ✅ 50% · ❌ 25% · ⏸ 25%.
+var caseShare = regexp.MustCompile(`(\d+)% · \S+ (\d+)% · \S+ (\d+)%`)
+
+// caseText is the testcase name of a link cell of the Schemes table: [SB-01-01 a](x).
+var caseText = regexp.MustCompile(`^\[(.*)\]\([^)]*\)$`)
+
+// readReport is the past run name as its REPORT.md tells it: the verdict line, the verdict of every path, testsuite
+// and testcase.
 func readReport(name, body string) pastRun {
-	run := pastRun{name: name, paths: map[string]count{}, suites: map[string]count{}}
+	run := pastRun{name: name, paths: map[string]count{}, suites: map[string]count{}, cases: map[string]caseRun{}}
 	var table map[string]count
-	verdict := ""
+	verdict, schemes := "", false
 
 	for _, line := range strings.Split(body, "\n") {
 		switch {
@@ -43,7 +52,10 @@ func readReport(name, body string) pastRun {
 			table = run.suites
 
 		case strings.HasPrefix(line, "## "):
-			table = nil
+			table, schemes = nil, strings.HasPrefix(line, headScheme)
+
+		case schemes && strings.HasPrefix(line, "| "+sliceCase+" |"):
+			readCase(run.cases, splitCells(line))
 
 		case table != nil && strings.HasPrefix(line, "| ") && !strings.HasPrefix(line, "| -- "):
 			cells := splitCells(line)
@@ -57,6 +69,33 @@ func readReport(name, body string) pastRun {
 	}
 
 	return run
+}
+
+// readCase puts the testcase of a row of the Schemes table — slice, scheme, verdict, share — into cases.
+func readCase(cases map[string]caseRun, cells []string) {
+	if len(cells) < 4 {
+		return
+	}
+
+	m := caseText.FindStringSubmatch(cells[1])
+	if m == nil {
+		return
+	}
+
+	words := strings.SplitN(cells[2], " ", 2)
+	c := caseRun{mark: words[0]}
+
+	if len(words) > 1 && words[0] != venom.MarkNotRun {
+		c.code = words[1]
+	}
+
+	if s := caseShare.FindStringSubmatch(cells[3]); s != nil {
+		c.ok, _ = strconv.Atoi(s[1])
+		c.failed, _ = strconv.Atoi(s[2])
+		c.other, _ = strconv.Atoi(s[3])
+	}
+
+	cases[unescape(m[1])] = c
 }
 
 // splitCells are the cells of a table row, \| kept inside a cell.

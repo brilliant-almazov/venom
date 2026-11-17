@@ -3,8 +3,6 @@ package runartifacts
 import (
 	"fmt"
 	"strings"
-
-	"github.com/ovh/venom"
 )
 
 // barCells is the width of a progress bar.
@@ -13,9 +11,16 @@ const barCells = 20
 // barGlyphs are the cells of ok, partial and failed, in that order.
 var barGlyphs = []string{"█", "▒", "░"}
 
+// barNoRun is the bar of a block no run has: a scheme drawn with no run, of testcases no earlier run of the set has.
+const barNoRun = "no run"
+
 // progress is the progress bar of a block: 20 cells of ok, partial and failed shared by the largest remainder method,
 // a share that is not zero has a cell at least, then the ok share rounded half up: [████████████████▒▒░░] 80 %.
 func progress(c count) string {
+	if c.all > 0 && c.unrun == c.all {
+		return barNoRun
+	}
+
 	var b strings.Builder
 
 	for i, n := range cellsOf([]int{c.ok, c.partial, c.notOK}, c.all) {
@@ -96,22 +101,10 @@ func okShare(c count) int {
 
 // stepCount is the count of the steps of a testcase, the denominator of its bar: ok passed, partial not run, failed.
 func stepCount(r row) count {
-	c := count{all: len(r.view.Steps)}
+	var c count
 
 	for _, s := range r.view.Steps {
-		switch s.Mark {
-		case venom.MarkPassed:
-			c.ok++
-			c.passed++
-
-		case venom.MarkFailed:
-			c.notOK++
-			c.failed++
-
-		default:
-			c.partial++
-			c.other++
-		}
+		c.add(s.Mark)
 	}
 
 	return c

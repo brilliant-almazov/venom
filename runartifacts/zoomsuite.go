@@ -2,7 +2,10 @@ package runartifacts
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
+
+	"github.com/gosimple/slug"
 )
 
 // zoomSuiteText is 03-suites/<testsuite>.md: the testsuite with its bar and history, then every testcase with every
@@ -19,12 +22,38 @@ func (l layout) zoomSuiteText(rows []row, past []pastRun, hist []map[string]coun
 		link(IndexFile, base, l.zoomIndex()))
 	fence(&b, []string{"testsuite " + rows[0].suite + "  " + bar(c)})
 	b.WriteString("## History\n\n")
-	drawSeries(&b, seriesOf(past, pickSuite(rows[0].suite), l.thisRun(), c))
+	drawSeries(&b, l.series(past, pickSuite(rows[0].suite), c))
 	drawProcesses(&b, headProcesses, rows, hist)
 
-	for _, r := range rows {
-		l.zoomCase(&b, base, r)
+	if !split(rows) {
+		for _, r := range rows {
+			l.zoomCase(&b, base, r)
+		}
+
+		return b.String()
 	}
+
+	fmt.Fprintf(&b, "## Testcases\n\n- index: %s\n\n", link(slug.Make(rows[0].suiteShort)+"/"+IndexFile, base,
+		filepath.Join(l.zoomCaseDir(rows[0]), IndexFile)))
+	b.WriteString("| testcase | verdict | steps | bar | zoom |\n| -- | -- | -- | -- | -- |\n")
+
+	for i, r := range rows {
+		fmt.Fprintf(&b, "| %s | %s | %d | %s | %s |\n", cell(r.testcase), verdictOf(r), len(r.view.Steps), progress(stepCount(r)),
+			link(filepath.Base(l.zoomCaseFile(r, i)), base, l.zoomCaseFile(r, i)))
+	}
+
+	return b.String()
+}
+
+// zoomCaseText is 03-suites/<testsuite>/<NN>-<testcase>.md of a testsuite split by testcase: the testcase i as its
+// section in a testsuite zoom.
+func (l layout) zoomCaseText(r row, i int) string {
+	base := dirOf(l.zoomCaseFile(r, i))
+	var b strings.Builder
+	fmt.Fprintf(&b, "# Testcase %s\n\n- testsuite: %s\n- zoom: %s · %s · %s\n\n", r.testcase,
+		link(cell(r.suite), base, l.zoomSuite(r)), link(IndexFile, base, filepath.Join(l.zoomCaseDir(r), IndexFile)),
+		link(l.pathOf(r), base, l.zoomPath(l.pathOf(r))), link(ZoomRunFile, base, l.zoomRun()))
+	l.zoomCase(&b, base, r)
 
 	return b.String()
 }
@@ -37,9 +66,12 @@ func (l layout) zoomCase(b *strings.Builder, base string, r row) {
 		protocol = link(protocolLink, base, r.protocol)
 	}
 
-	fmt.Fprintf(b, "## %s\n\n- verdict: %s\n- outcome: %s\n- steps: %s\n- scenario: %s\n- protocol: %s · scheme: %s\n",
-		r.testcase, verdictOf(r), r.outcome, progress(stepCount(r)), scenarioLink(base, r, r.view.Line), protocol,
-		link(wordScheme, base, l.caseScheme(r)))
+	fmt.Fprintf(b, "## %s\n\n- verdict: %s\n- outcome: %s\n- steps: %s\n- scenario: %s\n", r.testcase, verdictOf(r),
+		outcomeOf(r), progress(stepCount(r)), scenarioLink(base, r, r.view.Line))
+
+	if !l.plan {
+		fmt.Fprintf(b, "- protocol: %s · scheme: %s\n", protocol, link(wordScheme, base, l.caseScheme(r)))
+	}
 
 	for _, id := range traceIDs(r) {
 		fmt.Fprintf(b, "- trace id: %s\n", traceRef(base, r, id))
@@ -60,7 +92,7 @@ func (l layout) zoomCase(b *strings.Builder, base string, r row) {
 	}
 
 	fence(b, lines)
-	drawProcesses(b, "### Processes of "+strings.SplitN(r.testcase, " ", 2)[0], []row{r}, nil)
+	drawProcesses(b, "### Processes of "+caseID(r.testcase), []row{r}, nil)
 	b.WriteString("| step | executor | method | url / database | outcome | code | trace | scenario |\n")
 	b.WriteString("| -- | -- | -- | -- | -- | -- | -- | -- |\n")
 
@@ -76,6 +108,15 @@ func (l layout) zoomCase(b *strings.Builder, base string, r row) {
 	}
 
 	b.WriteString("\n")
+}
+
+// outcomeOf is the outcome of the protocol of the row, «no run» of a testcase no run has.
+func outcomeOf(r row) string {
+	if r.state == stateNoRun {
+		return stateNoRun
+	}
+
+	return r.outcome
 }
 
 func orEmpty(a, b string) string {

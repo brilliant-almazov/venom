@@ -12,12 +12,21 @@ import (
 // runsDir is the folder of the runs of a set: <set>/runs/<YYYY-MM>/<DD-n>.
 const runsDir = "runs"
 
-// pastRun is an earlier run of the same set as its REPORT.md tells it: the run total, each path and each testsuite.
+// pastRun is an earlier run of the same set as its REPORT.md tells it: the run total, each path, each testsuite and each
+// testcase by name.
 type pastRun struct {
 	name, dir string
 	total     count
 	paths     map[string]count
 	suites    map[string]count
+	cases     map[string]caseRun
+}
+
+// caseRun is a testcase of an earlier run as the Schemes table of its REPORT.md tells it: its verdict mark, its answer
+// code and the share of its steps ok, failed and not run in %.
+type caseRun struct {
+	mark, code        string
+	ok, failed, other int
 }
 
 // pastRuns are the runs of the set before the run folder dir, oldest first: every sibling folder <YYYY-MM>/<DD-n>
@@ -35,13 +44,19 @@ func pastRuns(dir string) []pastRun {
 	}
 
 	self := runName(root, abs)
+
+	return runsUnder(root, func(name string) bool { return runBefore(name, self) })
+}
+
+// runsUnder are the runs <YYYY-MM>/<DD-n> under the runs folder root with a REPORT.md that keep takes, oldest first.
+func runsUnder(root string, keep func(name string) bool) []pastRun {
 	reports, _ := filepath.Glob(filepath.Join(root, "*", "*", ReportFile))
 	var runs []pastRun
 
 	for _, report := range reports {
 		name := runName(root, filepath.Dir(report))
 
-		if !runBefore(name, self) {
+		if !keep(name) {
 			continue
 		}
 

@@ -62,10 +62,15 @@ func caseIDs(rows []row) string {
 	ids := make([]string, 0, len(rows))
 
 	for _, r := range rows {
-		ids = append(ids, strings.SplitN(r.testcase, " ", 2)[0])
+		ids = append(ids, caseID(r.testcase))
 	}
 
 	return strings.Join(ids, " ")
+}
+
+// caseID is the row id of a testcase: the first word of its name.
+func caseID(name string) string {
+	return strings.SplitN(name, " ", 2)[0]
 }
 
 // pointHistory is the ok share of a point in every earlier run that has it, then in this run, with Δ p.p. of this run

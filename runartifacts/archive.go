@@ -43,6 +43,24 @@ func (a *archive) pointsIn(rel string) []map[string]count {
 // readPoints are the rows of the processes table of a zoom file by process, direction and point.
 func readPoints(body string) map[string]count {
 	points := map[string]count{}
+
+	for _, cells := range processRows(body) {
+		c := countFrom(cells[4])
+
+		if m := okPct.FindStringSubmatch(cells[5]); m != nil {
+			c.ok = partOf(m[1], c.all)
+		}
+
+		points[unescape(cells[0])+"\x00"+cells[1]+"\x00"+unescape(cells[2])] = c
+	}
+
+	return points
+}
+
+// processRows are the cells of the rows of the processes table of a zoom file: process, direction, point, testcases,
+// verdict, bar, failed spans, cases, history.
+func processRows(body string) [][]string {
+	var rows [][]string
 	in := false
 
 	for _, line := range strings.Split(body, "\n") {
@@ -57,19 +75,13 @@ func readPoints(body string) map[string]count {
 				continue
 			}
 
-			c := countFrom(cells[4])
-
-			if m := okPct.FindStringSubmatch(cells[5]); m != nil {
-				c.ok = partOf(m[1], c.all)
-			}
-
-			points[unescape(cells[0])+"\x00"+cells[1]+"\x00"+unescape(cells[2])] = c
+			rows = append(rows, cells)
 
 		default:
 		}
 	}
 
-	return points
+	return rows
 }
 
 // relOf is a file of the run folder dir relative to it, the key of the same file in the earlier runs.
@@ -81,4 +93,3 @@ func relOf(dir, file string) string {
 
 	return rel
 }
-

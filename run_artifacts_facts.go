@@ -12,9 +12,19 @@ import (
 type StepFacts struct {
 	Method, URL string
 	// Database is the driver and the database name of an sql step, never its credentials.
-	Database   string
-	SQL        []string
+	Database string
+	SQL      []string
+	// Queue are the exchange, the routing key and the queue of a rabbitmq or amqp step, URL its broker.
+	Queue      []string
 	Assertions []string
+	// Calls are the steps of the user executor the step calls, its inputs filled from the step as written, each with the
+	// calls of its own; only a scheme with no run fills them (PlanView).
+	Calls []StepView
+}
+
+// queueFields are the fields that name the queue of a rabbitmq or amqp step and the word each is written with.
+var queueFields = [][2]string{
+	{"exchange", "exchange"}, {"routingKey", "routing key"}, {"qName", "queue"}, {"sourceAddr", "queue"}, {"targetAddr", "queue"},
 }
 
 // stepFactsOf are the facts of a step from its fields m, the computed request of r when it ran (r nil when it did not).
@@ -49,6 +59,16 @@ func stepFactsOf(m map[string]interface{}, r *TestStepResult) StepFacts {
 
 	if file := str("file"); file != "" && f.Database != "" {
 		f.SQL = append(f.SQL, "file: "+file)
+	}
+
+	for _, q := range queueFields {
+		if v := str(q[0]); v != "" {
+			f.Queue = append(f.Queue, q[1]+" "+v)
+		}
+	}
+
+	if len(f.Queue) > 0 {
+		f.Method, f.URL = str("clientType"), str("addrs")+str("addr")
 	}
 
 	if list, ok := m["assertions"].([]interface{}); ok {
