@@ -18,8 +18,7 @@ const (
 )
 
 // protocolOutcome is the outcome of every testcase, never empty: ok when it passed, partial when it did not pass and at
-// least one assertion held, failed otherwise — skipped, interrupted and not run are not passed («Ничего скипаться не
-// должно»).
+// least one assertion held, failed otherwise — skipped, interrupted and not run are not passed (nothing is skipped).
 func protocolOutcome(tc *TestCase) string {
 	if tc.Status == StatusPass {
 		return protocolOutcomeOK

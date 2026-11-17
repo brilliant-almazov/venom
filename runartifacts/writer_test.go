@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"testing"
 	"time"
 
@@ -213,4 +214,65 @@ func TestEveryStepTraceInProtocol(t *testing.T) {
 		require.NoError(t, err, id)
 		assert.Contains(t, string(tree), "svc-"+id[:4])
 	}
+}
+
+// The report names the service to fix: a call whose trace failed deep in billing names svc-billing with its span, a
+// call with no trace names none with the reason — in the protocol, PROBLEMS.md and the testsuite row of REPORT.md
+// explicitly.
+func TestReportNamesServiceToFix(t *testing.T) {
+	tempo := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/traces/"+traceOK {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = w.Write([]byte(`{"batches":[
+{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"svc-gateway"}}]},"scopeSpans":[{"spans":[
+ {"traceId":"` + traceOK + `","spanId":"a","name":"POST /v1/billing/accounts","startTimeUnixNano":"1","endTimeUnixNano":"9","status":{"code":2}}]}]},
+{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"svc-billing"}}]},"scopeSpans":[{"spans":[
+ {"traceId":"` + traceOK + `","spanId":"b","parentSpanId":"a","name":"billing.v1.Accounts/Create","startTimeUnixNano":"2","endTimeUnixNano":"8",
+  "attributes":[{"key":"rpc.grpc.status_code","value":{"intValue":"13"}}]}]}]}]}`))
+	}))
+	defer tempo.Close()
+
+	upstream := call(venom.StatusFail, 500, traceOK, "", "expected 200 got 500")
+	upstream.Name = "http_call"
+	upstream.Interpolated = []byte("type: http_call\ntempo: " + tempo.URL + "\n")
+	monolith := venom.TestStepResult{Name: "monolith", Status: venom.StatusFail, ComputedVars: venom.H{"result.statuscode": 500},
+		Interpolated: []byte("type: http\n"), Errors: []venom.Failure{{Value: "expected 200 got 500"}}}
+
+	ts := &venom.TestSuite{Name: "SB-03-01 accounts", ShortName: "SB-03-01-accounts", Filepath: filepath.Join(t.TempDir(), "accounts", "suite.yml")}
+	ts.TestCases = []venom.TestCase{
+		{TestCaseInput: venom.TestCaseInput{Name: "SB-03-01-01 create"}, Status: venom.StatusFail, TestStepResults: []venom.TestStepResult{upstream}},
+		{TestCaseInput: venom.TestCaseInput{Name: "SB-03-01-02 monolith"}, Status: venom.StatusFail, TestStepResults: []venom.TestStepResult{monolith}},
+	}
+
+	run := filepath.Join(t.TempDir(), "run")
+	w := New(run)
+	ctx := context.Background()
+
+	for i := range ts.TestCases {
+		w.BeforeVerdict(ctx, ts, &ts.TestCases[i])
+		w.Testcase(ctx, ts, &ts.TestCases[i])
+	}
+
+	require.NoError(t, w.Finish(ctx, &venom.Tests{}))
+
+	read := func(rel string) string {
+		body, err := os.ReadFile(filepath.Join(run, rel))
+		require.NoError(t, err, rel)
+
+		return string(body)
+	}
+
+	const billing = "svc-billing · billing.v1.Accounts/Create"
+	const unknown = "not established (the call returned no trace id)"
+	assert.Contains(t, read("protocols/SB-03-01-failed-accounts/SB-03-01-01-failed-create.md"), "\n\nfix in: "+billing+"\n\n## Links")
+	assert.Contains(t, read("protocols/SB-03-01-failed-accounts/SB-03-01-02-failed-monolith.md"), "\n\nfix in: "+unknown+"\n\n## Links")
+
+	problems := read(ProblemsFile)
+	assert.Contains(t, problems, "| trace | fix in |")
+	assert.Regexp(t, `\| SB-03-01-01 create \|.*\| `+billing+` \|`, problems)
+	assert.Regexp(t, `\| SB-03-01-02 monolith \|.*\| `+regexp.QuoteMeta(unknown)+` \|`, problems)
+
+	assert.Contains(t, read(ReportFile), "| ❌ 0/2 | "+billing+"; "+unknown+" |")
 }

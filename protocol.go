@@ -390,7 +390,7 @@ func protocolBody(r *TestStepResult) string {
 }
 
 // protocolTrace prints the span tree <trace_dir>/<trace_id>.md of the last call, then the tree of every other step
-// with a trace id of its own («трэйсы долнжы бытиь в протоколах»), looked up in every trace_dir and traces the steps
+// with a trace id of its own (traces belong in the protocols), looked up in every trace_dir and traces the steps
 // of the testcase were given.
 func protocolTrace(tc *TestCase, call *TestStepResult) string {
 	if call == nil {

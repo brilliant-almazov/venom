@@ -103,12 +103,12 @@ func (l layout) writeReport(w *Writer) error {
 		fmt.Fprintf(&b, "| %s | `%s` | %s | %s | %s |\n", cell(name), folder, pc, pc.mark(), link(name, base, l.pathScheme(name)))
 	}
 
-	b.WriteString("\n## Testsuites\n\n| testsuite | protocols | testcases | verdict |\n| -- | -- | -- | -- |\n")
+	b.WriteString("\n## Testsuites\n\n| testsuite | protocols | testcases | verdict | " + wordFixer + " |\n| -- | -- | -- | -- | -- |\n")
 
 	for _, s := range suitesOf(l.rows) {
 		sc := countOf(s)
-		fmt.Fprintf(&b, "| %s | %s | %s | %s |\n", cell(s[0].suite), link(filepath.Base(dirOf(s[0].protocol))+"/", base,
-			dirOf(s[0].protocol)), sc, sc.mark())
+		fmt.Fprintf(&b, "| %s | %s | %s | %s | %s |\n", cell(s[0].suite), link(filepath.Base(dirOf(s[0].protocol))+"/", base,
+			dirOf(s[0].protocol)), sc, sc.mark(), fixersOf(s))
 	}
 
 	b.WriteString("\n## Schemes\n\n| slice | scheme | verdict | share |\n| -- | -- | -- | -- |\n")

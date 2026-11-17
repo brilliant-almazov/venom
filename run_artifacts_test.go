@@ -142,8 +142,8 @@ testcases:
 }
 
 // The protocol of every testcase carries its outcome in the file name: ok, partial or failed; a skipped testcase too,
-// failed, or partial when an assertion held (run 17-9: «где статус прогона в нахвание файла протокла?»; «Ничего
-// скипаться не должно»).
+// failed, or partial when an assertion held (run 17-9: the outcome of the run belongs in the protocol file name; nothing
+// is skipped).
 func TestProtocolOutcomeFile(t *testing.T) {
 	applied := func(ok ...bool) TestStepResult {
 		var r TestStepResult
