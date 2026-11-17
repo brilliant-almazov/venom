@@ -160,14 +160,15 @@ func TestSchemeBarsAfterEveryTestcase(t *testing.T) {
 	assert.Contains(t, string(body), "└─ BL-01-02 [░░░░░░░░░░░░░░░░░░░░] 0 %  ❌ 500\n")
 }
 
-// The scheme of the suite drawn at intake lives in QA next to the runs, cases/<suite>/schemes, and wins over a schemes
-// folder of the scenario set: its filled copy, bars and all, is in <run>/schemes/ after every testcase.
+// The scheme of the suite drawn by hand at intake lives in QA, schemes/<suite>, and wins over a schemes folder of the
+// scenario set: every run copies it as is next to the runs, cases/<suite>/schemes, and its filled copy, bars and all,
+// into <run>/schemes/ after every testcase.
 func TestSchemeFromQA(t *testing.T) {
 	root := t.TempDir()
 	qa := filepath.Join(root, "cgw-qa")
-	require.NoError(t, os.MkdirAll(filepath.Join(qa, "cases", "supabase", SchemesDir), 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(qa, "cases", "supabase", SchemesDir, "1-system.md"),
-		[]byte("gateway ⟦SB-01-01:bar⟧\n"), 0o644))
+	drawn := "gateway ⟦SB-01-01:bar⟧\n"
+	require.NoError(t, os.MkdirAll(filepath.Join(qa, SchemesDir, "supabase"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(qa, SchemesDir, "supabase", "1-system.md"), []byte(drawn), 0o644))
 	scenarios := filepath.Join(root, "cgw-qa-scenarios", "scenarios", "supabase")
 	require.NoError(t, os.MkdirAll(filepath.Join(scenarios, SchemesDir), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(scenarios, SchemesDir, "old.md"), []byte("⟦SB-01-01⟧"), 0o644))
@@ -186,6 +187,10 @@ func TestSchemeFromQA(t *testing.T) {
 	assert.Equal(t, "gateway [████████████████████] 100 %  ✅ 200\n", string(body))
 	assert.NoFileExists(t, filepath.Join(run, SchemesDir, "old.md"))
 	assert.NoFileExists(t, filepath.Join(run, SchemesDir, SystemFile))
+
+	mirror, err := os.ReadFile(filepath.Join(qa, "cases", "supabase", SchemesDir, "1-system.md"))
+	require.NoError(t, err)
+	assert.Equal(t, drawn, string(mirror))
 	require.NoError(t, w.Finish(ctx, &venom.Tests{}))
 }
 

@@ -61,6 +61,8 @@ type Writer struct {
 	past *archive
 	// plan: the zoom set is drawn with no run, every bar from the last earlier run of each testcase (WritePlan).
 	plan bool
+	// mirrored: the QA scheme of the suite is copied next to its runs, once per run (mirrorSchemes).
+	mirrored bool
 }
 
 // row is one testcase of the run as the protocols, the index, the schemes and the report read it.

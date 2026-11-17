@@ -703,11 +703,13 @@ the run removes every empty folder left under `<run>`.
   sent, the answer and the trace (runs 17-1…17-3 lost them, `keepUserExecutorCall`). The output of an executor that
   passed is laid over it, its keys win.
 
-The scheme of a suite drawn at intake lives in QA next to its runs: `<set>/schemes/` for a run folder
-`<set>/runs/<YYYY-MM>/<DD-n>` (cgw-qa `cases/supabase/schemes/`, `cases/billing/schemes/`,
-`cases/crawler/schemes/`). When it is there, it is the only scheme taken: it is copied to `<run>/schemes/` file by
-file (`cases/supabase/schemes/1-system.md` → `<run>/schemes/1-system.md`), with only its anchors replaced. Without
-it, the first `schemes/` folder met going up from a testsuite file is taken. `<case>` is a testcase name, or the row id its name or the
+The scheme of a suite is drawn by hand at intake in QA: `<qa>/schemes/<suite>/` (cgw-qa `schemes/supabase/`,
+`schemes/billing/`, `schemes/crawler/`). For a run folder `<qa>/cases/<suite>/runs/<YYYY-MM>/<DD-n>`, venom takes it
+as the only scheme folder and writes two copies: once per run, the scheme as drawn, byte for byte, into
+`<qa>/cases/<suite>/schemes/` next to the runs; after every testcase and at the end, the scheme with every anchor and
+progress bar filled into `<run>/schemes/` (`schemes/supabase/1-system.md` → `cases/supabase/schemes/1-system.md`
+and `<run>/schemes/1-system.md`). Without a QA scheme, `<set>/schemes/` next to the runs is taken, else the first
+`schemes/` folder met going up from a testsuite file. `<case>` is a testcase name, or the row id its name or the
 name of its testsuite starts with, followed by a space, `-`, `_`, `:`, `·` or `.` (`SB-01-02`); of several testcases of
 one case the first failed one counts. `<hop>` is the key of a step info line `hop: <key>` (`hop: seed-<key>` for a seed
 step).
