@@ -658,7 +658,9 @@ folder only when a trace is saved (run 17-4 left an empty `raw/identifier-link/`
 the run removes every empty folder left under `<run>`.
 
 - A span tree of a traced call that no step saved is fetched from Tempo before the trace gate, by the `tempo_url` of a
-  step of the testcase or its var `tempo_url`, up to 10 s; a trace Tempo does not have makes the line
+  step of the testcase — `tempo_url` of a native executor or `tempo` of a user executor (`http_call`, `trace_save`) — or
+  its var `tempo_url` or `tempo`, up to 10 s (run 17-7: every step of the case said `tempo`, the tree was never fetched,
+  `TestTraceFetchedByTempoOfUserExecutor`); a trace Tempo does not have makes the line
   `- trace not saved: <trace_id>: <folders tried>` under Trace and fails the testcase (section 10, `traceGate`).
 - A call that returns no trace id (the monolith) needs no trace: its Trace section lists every `sql` step of the
   testcase in its place, `- db read: step N "<name>" <status>`, each query and the rows read.

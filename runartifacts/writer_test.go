@@ -2,6 +2,8 @@ package runartifacts
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -116,4 +118,46 @@ func TestSchemesOfTheCaseSet(t *testing.T) {
 	body, err := os.ReadFile(filepath.Join(run, SchemesDir, "3-cases", "SB-01-02.md"))
 	require.NoError(t, err)
 	assert.Equal(t, "✅ 200 ✅ 200", string(body))
+}
+
+// A call of a user executor names Tempo by tempo, not tempo_url, and its trace_save was given no traces folder: the
+// span tree is fetched before the verdict and lies in the protocol and protocols/traces (run 17-7, SB-01-01).
+func TestTraceFetchedByTempoOfUserExecutor(t *testing.T) {
+	tempo := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/traces/"+traceOK {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = w.Write([]byte(`{"batches":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"svc-gateway"}}]},` +
+			`"scopeSpans":[{"spans":[{"traceId":"` + traceOK + `","spanId":"a","name":"/v1/supabase/webhook/{integration_hash_ids}",` +
+			`"startTimeUnixNano":"1","endTimeUnixNano":"2"}]}]}]}`))
+	}))
+	defer tempo.Close()
+
+	r := call(venom.StatusPass, 200, traceOK, "")
+	r.Name = "http_call"
+	r.Interpolated = []byte("type: http_call\ntempo: " + tempo.URL + "\ntraces: \"\"\n")
+	save := venom.TestStepResult{Name: "trace_save", Status: venom.StatusPass,
+		Interpolated: []byte("type: trace_save\ntrace: " + traceOK + "\ntempo: " + tempo.URL + "\ntraces: \"\"\n")}
+
+	ts := &venom.TestSuite{Name: "SB-01-01", ShortName: "receive-webhook-ok", Filepath: filepath.Join(t.TempDir(), "suite.yml")}
+	ts.TestCases = []venom.TestCase{{TestCaseInput: venom.TestCaseInput{Name: "SB-01-01 webhook"}, Status: venom.StatusPass,
+		TestStepResults: []venom.TestStepResult{r, save}}}
+
+	run := filepath.Join(t.TempDir(), "run")
+	w := New(run)
+	ctx := context.Background()
+	tc := &ts.TestCases[0]
+	w.BeforeVerdict(ctx, ts, tc)
+	assert.Empty(t, venom.TracesWithoutTree(tc))
+	w.Testcase(ctx, ts, tc)
+	require.NoError(t, w.Finish(ctx, &venom.Tests{}))
+
+	protocol, err := os.ReadFile(filepath.Join(run, "protocols", "receive-webhook-ok", "SB-01-01-webhook.md"))
+	require.NoError(t, err)
+	assert.Contains(t, string(protocol), "svc-gateway · /v1/supabase/webhook/{integration_hash_ids}")
+	assert.NotContains(t, string(protocol), "trace not saved")
+	tree, err := os.ReadFile(filepath.Join(run, "protocols", "traces", traceOK+".md"))
+	require.NoError(t, err)
+	assert.Contains(t, string(tree), "svc-gateway")
 }
