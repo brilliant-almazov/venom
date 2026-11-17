@@ -160,6 +160,35 @@ func TestSchemeBarsAfterEveryTestcase(t *testing.T) {
 	assert.Contains(t, string(body), "└─ BL-01-02 [░░░░░░░░░░░░░░░░░░░░] 0 %  ❌ 500\n")
 }
 
+// The scheme of the suite drawn at intake lives in QA, <qa>/schemes/<suite>, and wins over a schemes folder of the
+// scenario set: its filled copy, bars and all, is in <run>/schemes/ after every testcase.
+func TestSchemeFromQA(t *testing.T) {
+	root := t.TempDir()
+	qa := filepath.Join(root, "cgw-qa")
+	require.NoError(t, os.MkdirAll(filepath.Join(qa, SchemesDir, "supabase"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(qa, SchemesDir, "supabase", "1-system.md"),
+		[]byte("gateway ⟦SB-01-01:bar⟧\n"), 0o644))
+	scenarios := filepath.Join(root, "cgw-qa-scenarios", "scenarios", "supabase")
+	require.NoError(t, os.MkdirAll(filepath.Join(scenarios, SchemesDir), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(scenarios, SchemesDir, "old.md"), []byte("⟦SB-01-01⟧"), 0o644))
+
+	ts := &venom.TestSuite{Name: "SB-01 webhook", ShortName: "webhook", Filepath: filepath.Join(scenarios, "a", "suite.yml")}
+	ts.TestCases = []venom.TestCase{{TestCaseInput: venom.TestCaseInput{Name: "SB-01-01 receive"}, Status: venom.StatusPass,
+		TestStepResults: []venom.TestStepResult{call(venom.StatusPass, 200, "", "")}}}
+
+	run := filepath.Join(qa, "cases", "supabase", "runs", "2026-11", "18-1")
+	w := New(run)
+	ctx := context.Background()
+	w.Testcase(ctx, ts, &ts.TestCases[0])
+
+	body, err := os.ReadFile(filepath.Join(run, SchemesDir, "1-system.md"))
+	require.NoError(t, err)
+	assert.Equal(t, "gateway [████████████████████] 100 %  ✅ 200\n", string(body))
+	assert.NoFileExists(t, filepath.Join(run, SchemesDir, "old.md"))
+	assert.NoFileExists(t, filepath.Join(run, SchemesDir, SystemFile))
+	require.NoError(t, w.Finish(ctx, &venom.Tests{}))
+}
+
 // A call of a user executor names Tempo by tempo, not tempo_url, and its trace_save was given no traces folder: the
 // span tree is fetched before the verdict and lies in the protocol and protocols/traces (run 17-7, SB-01-01).
 func TestTraceFetchedByTempoOfUserExecutor(t *testing.T) {

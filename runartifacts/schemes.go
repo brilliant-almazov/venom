@@ -41,10 +41,15 @@ func (w *Writer) fillSchemes(ctx context.Context) error {
 	return nil
 }
 
-// schemeFolders are the schemes folders found up from the testsuite files; with none, the schemes folder of the case
-// set the run folder belongs to, <set>/schemes for a run folder <set>/runs/<YYYY-MM>/<DD-n>, when the testsuites live
-// in another repository than the schemes.
+// schemeFolders are the folders of the schemes drawn at intake. First the scheme of the suite in QA,
+// <qa>/schemes/<suite> for a run folder <qa>/cases/<suite>/runs/<YYYY-MM>/<DD-n> (qaSchemes). Without it, the schemes
+// folders found up from the testsuite files. With none of those, the schemes folder of the case set the run folder
+// belongs to, <set>/schemes, when the testsuites live in another repository than the schemes.
 func (w *Writer) schemeFolders() []string {
+	if qa := qaSchemes(w.dir); qa != "" {
+		return []string{qa}
+	}
+
 	var dirs []string
 	seen := map[string]bool{}
 
@@ -91,4 +96,28 @@ func (w *Writer) fillFolder(src string) error {
 
 		return writeFile(to, []byte(filled))
 	})
+}
+
+// qaSchemes is the scheme of the suite in QA for the run folder dir, <qa>/cases/<suite>/runs/<YYYY-MM>/<DD-n> →
+// <qa>/schemes/<suite>; empty when dir is not laid out so or QA has no scheme of the suite.
+func qaSchemes(dir string) string {
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return ""
+	}
+
+	set := filepath.Dir(filepath.Dir(filepath.Dir(abs)))
+	cases := filepath.Dir(set)
+
+	if filepath.Base(filepath.Dir(filepath.Dir(abs))) != runsDir || filepath.Base(cases) != "cases" {
+		return ""
+	}
+
+	qa := filepath.Join(filepath.Dir(cases), SchemesDir, filepath.Base(set))
+
+	if st, err := os.Stat(qa); err != nil || !st.IsDir() {
+		return ""
+	}
+
+	return qa
 }
