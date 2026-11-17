@@ -240,16 +240,16 @@ func protocolHeaderValues(r *TestStepResult, prefix string) map[string]string {
 	return values
 }
 
-// protocolMask hides the token of an Authorization header, its scheme and length kept.
+// protocolMask hides the token of an Authorization header, its scheme kept; every other credential header (Apikey,
+// Cookie, …) is hidden by HideSensitive over the whole protocol.
 func protocolMask(name, value string) string {
 	if !strings.EqualFold(name, "authorization") || value == "" {
 		return value
 	}
-	scheme, token := "", value
 	if i := strings.Index(value, " "); i >= 0 {
-		scheme, token = value[:i+1], strings.TrimSpace(value[i+1:])
+		return value[:i+1] + SecretMark
 	}
-	return fmt.Sprintf("%s"+protocolMasked, scheme, len(token))
+	return SecretMark
 }
 
 // protocolBodyBlock prints a body verbatim in a code block, a JSON body one key per line, cut at protocolBodyMax.

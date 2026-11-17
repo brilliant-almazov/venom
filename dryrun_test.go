@@ -255,7 +255,7 @@ func TestMaskCredentials(t *testing.T) {
 	out := maskCredentials(in)
 	assert.NotContains(t, out, "s3cr3t")
 	assert.NotContains(t, out, jwt)
-	assert.Contains(t, out, "postgresql://postgres:__hidden__@pg-billing:5432/billing")
+	assert.Contains(t, out, "postgresql://postgres:"+SecretMark+"@pg-billing:5432/billing")
 	assert.Equal(t, "http://gw/v1/accounts", maskCredentials("http://gw/v1/accounts"))
 }
 
