@@ -65,6 +65,8 @@ type row struct {
 	view    venom.ProtocolView
 	schemes string
 	state   string
+	// outcome is ok, partial or failed of the protocol, failed until the testcase ends with one of its own.
+	outcome string
 }
 
 // New is the writer of the run folder dir.

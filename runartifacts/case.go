@@ -8,8 +8,9 @@ import (
 	"github.com/ovh/venom"
 )
 
-// Testcase writes protocols/<testsuite>/<row id>-<ok|partial|failed>-<rest>.md the moment the testcase ends, copies its span trees to
-// protocols/traces and redraws the index, the report, the problems and the schemes it is on.
+// Testcase writes protocols/<testsuite>/<row id>-<ok|partial|failed>-<rest>.md the moment the testcase ends, the folder
+// of the testsuite named by its outcome too (suiteDir), copies its span trees to protocols/traces and redraws the index,
+// the report, the problems and the schemes it is on — the whole run folder when the testsuite folder moved.
 func (w *Writer) Testcase(ctx context.Context, ts *venom.TestSuite, tc *venom.TestCase) {
 	view := venom.ProtocolOf(ctx, ts, tc)
 
@@ -22,6 +23,8 @@ func (w *Writer) Testcase(ctx context.Context, ts *venom.TestSuite, tc *venom.Te
 
 	r := w.rowOf(ts, caseIndex(ts, tc))
 	r.state = stateDone
+	r.outcome = venom.ProtocolOutcome(tc)
+	moved := w.moveSuite(ctx, r)
 	w.renameProtocol(r, venom.ProtocolOutcomeFile(tc))
 	r.trace = ""
 
@@ -49,7 +52,14 @@ func (w *Writer) Testcase(ctx context.Context, ts *venom.TestSuite, tc *venom.Te
 		venom.Error(ctx, "unable to write protocol %s: %v", r.protocol, err)
 	}
 
-	w.refresh(ctx, r)
+	if !moved {
+		w.refresh(ctx, r)
+		return
+	}
+
+	if err := w.render(ctx); err != nil {
+		venom.Error(ctx, "unable to redraw the run folder %s: %v", w.dir, err)
+	}
 }
 
 // renameProtocol names the protocol of r by the outcome of its testcase; the protocol written under the former name as

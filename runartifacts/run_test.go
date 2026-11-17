@@ -107,7 +107,7 @@ func TestRunOfEveryOutcome(t *testing.T) {
 	require.NoError(t, v.OutputResult())
 	require.NoError(t, w.Finish(ctx, &v.Tests))
 
-	dir := filepath.Join(run, ProtocolsDir, "sb-02-01-outcomes")
+	dir := filepath.Join(run, ProtocolsDir, "SB-02-01-partial-outcomes")
 
 	for name, want := range map[string]string{
 		"SB-02-01-01-ok-green":      "✅ passed",
@@ -133,7 +133,7 @@ func TestRunOfEveryOutcome(t *testing.T) {
 		assert.Regexp(t, `^SB-02-01-0[1-5]-(ok|partial|failed)-[a-z]+\.md$`, p.Name())
 	}
 
-	green := readRun(t, run, "protocols/sb-02-01-outcomes/SB-02-01-01-ok-green.md")
+	green := readRun(t, run, "protocols/SB-02-01-partial-outcomes/SB-02-01-01-ok-green.md")
 	assert.Contains(t, green, "- trace id: `"+traceOK+"` [span tree](../traces/"+traceOK+".md)")
 	assert.Contains(t, green, "svc-billing ✅")
 	tree := readRun(t, run, "protocols/traces/"+traceOK+".md")
