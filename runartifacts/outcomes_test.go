@@ -70,10 +70,10 @@ func TestKilledRunLeavesInterrupted(t *testing.T) {
 	w.Testcase(ctx, ts, &ts.TestCases[0])
 	w.Start(ctx, ts, &ts.TestCases[1])
 
-	assert.Contains(t, readRun(t, run, "protocols/sb-01-01-link/SB-01-01-01-ok-create-link.md"), "✅ passed")
-	assert.NoFileExists(t, filepath.Join(run, "protocols/sb-01-01-link/SB-01-01-01-failed-create-link.md"),
+	assert.Contains(t, readRun(t, run, "protocols/SB-01-01-partial-link/SB-01-01-01-ok-create-link.md"), "✅ passed")
+	assert.NoFileExists(t, filepath.Join(run, "protocols/SB-01-01-partial-link/SB-01-01-01-failed-create-link.md"),
 		"the protocol written as the testcase began is renamed by its outcome, not left next to it")
-	interrupted := readRun(t, run, "protocols/sb-01-01-link/SB-01-01-02-failed-read-link.md")
+	interrupted := readRun(t, run, "protocols/SB-01-01-partial-link/SB-01-01-02-failed-read-link.md")
 	assert.Contains(t, interrupted, "⏸ interrupted: the run ended before the testcase did")
 	assert.Contains(t, interrupted, "scenarios/supabase/identifier-link/SB-01-01-link.yml:14](")
 	assert.Contains(t, interrupted, "| 2 | check | check | ⏸ | not run: the testcase stopped before this step |")
@@ -98,15 +98,15 @@ func TestAbortedRunNamesEveryTestcase(t *testing.T) {
 	w.Start(ctx, ts, &ts.TestCases[0])
 	require.NoError(t, w.Abort(ctx, "interrupted by signal terminated"))
 
-	assert.Contains(t, readRun(t, run, "protocols/sb-01-01-link/SB-01-01-01-failed-create-link.md"),
+	assert.Contains(t, readRun(t, run, "protocols/SB-01-01-failed-link/SB-01-01-01-failed-create-link.md"),
 		"⏸ interrupted: interrupted by signal terminated")
-	assert.Contains(t, readRun(t, run, "protocols/sb-01-01-link/SB-01-01-02-failed-read-link.md"),
+	assert.Contains(t, readRun(t, run, "protocols/SB-01-01-failed-link/SB-01-01-02-failed-read-link.md"),
 		"⏸ not run: interrupted by signal terminated")
 	assert.Contains(t, readRun(t, run, ProblemsFile), "- run ended early: interrupted by signal terminated")
 	assert.Contains(t, readRun(t, run, ReportFile), "- run ended early: interrupted by signal terminated")
 
 	w.Testcase(ctx, ts, &ts.TestCases[1])
-	assert.Contains(t, readRun(t, run, "protocols/sb-01-01-link/SB-01-01-02-failed-read-link.md"), "⏸ not run")
+	assert.Contains(t, readRun(t, run, "protocols/SB-01-01-failed-link/SB-01-01-02-failed-read-link.md"), "⏸ not run")
 }
 
 // A setup error before any testcase ran still writes protocols/INDEX.md, REPORT.md and PROBLEMS.md with the error.
@@ -159,7 +159,7 @@ func TestSchemesDrawnFromTheRun(t *testing.T) {
 	path := readRun(t, run, "schemes/identifier-link/PATH.md")
 	assert.Contains(t, path, "- folder: `"+filepath.ToSlash(filepath.Dir(ts.Filepath))+"`")
 	assert.Contains(t, path, "[SYSTEM.md](../SYSTEM.md)")
-	assert.Contains(t, path, "[protocol](../../protocols/sb-01-01-link/SB-01-01-02-failed-read-link.md)")
+	assert.Contains(t, path, "[protocol](../../protocols/SB-01-01-partial-link/SB-01-01-02-failed-read-link.md)")
 
 	failedCase := readRun(t, run, "schemes/identifier-link/SB-01-01-02-read-link.md")
 	assert.Contains(t, failedCase, "1 call · http ─► ❌ 409 `4bf92f35`")
@@ -167,10 +167,10 @@ func TestSchemesDrawnFromTheRun(t *testing.T) {
 	assert.Contains(t, failedCase, "2 check · check ─► ⏸")
 	assert.Contains(t, failedCase, "SB-01-01-link.yml:16](")
 	assert.Contains(t, failedCase, "#L16)")
-	assert.Contains(t, failedCase, "[protocol](../../protocols/sb-01-01-link/SB-01-01-02-failed-read-link.md)")
+	assert.Contains(t, failedCase, "[protocol](../../protocols/SB-01-01-partial-link/SB-01-01-02-failed-read-link.md)")
 	assert.Regexp(t, hexTrace, failedCase)
 
-	protocol := readRun(t, run, "protocols/sb-01-01-link/SB-01-01-01-ok-create-link.md")
+	protocol := readRun(t, run, "protocols/SB-01-01-partial-link/SB-01-01-01-ok-create-link.md")
 	assert.Contains(t, protocol, "## Links")
 	assert.Contains(t, protocol, "SB-01-01-link.yml:3](")
 	assert.Contains(t, protocol, "- trace id: `"+traceOK+"` [span tree](../traces/"+traceOK+".md)")

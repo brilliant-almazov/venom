@@ -11,6 +11,12 @@ const (
 // skipped, interrupted before any assertion held, never started.
 const ProtocolOutcomeFailed = protocolOutcomeFailed
 
+// The outcomes ok and partial of a protocol, as a testsuite folder of the run reads them from its testcases.
+const (
+	ProtocolOutcomeOK      = protocolOutcomeOK
+	ProtocolOutcomePartial = protocolOutcomePartial
+)
+
 // protocolOutcome is the outcome of every testcase, never empty: ok when it passed, partial when it did not pass and at
 // least one assertion held, failed otherwise — skipped, interrupted and not run are not passed («Ничего скипаться не
 // должно»).

@@ -80,17 +80,17 @@ func TestRunFolder(t *testing.T) {
 		return string(body)
 	}
 
-	assert.Contains(t, read("protocols/billing/S-001-ok-create.md"), "svc-billing ✅")
-	assert.Contains(t, read("protocols/billing/S-002-failed-conflict.md"), "- trace not saved: "+traceLost)
+	assert.Contains(t, read("protocols/partial-billing/S-001-ok-create.md"), "svc-billing ✅")
+	assert.Contains(t, read("protocols/partial-billing/S-002-failed-conflict.md"), "- trace not saved: "+traceLost)
 	assert.Equal(t, "svc-billing ✅", read("protocols/traces/"+traceOK+".md"))
 
 	index := read("protocols/INDEX.md")
-	assert.Contains(t, index, "| billing | S-001 create | ✅ 200 | [0af76519](traces/"+traceOK+".md) | [protocol](billing/S-001-ok-create.md) |")
-	assert.Contains(t, index, "| billing | S-002 conflict | ❌ 409 | trace not saved `"+traceLost+"` | [protocol](billing/S-002-failed-conflict.md) |")
+	assert.Contains(t, index, "| billing | S-001 create | ✅ 200 | [0af76519](traces/"+traceOK+".md) | [protocol](partial-billing/S-001-ok-create.md) |")
+	assert.Contains(t, index, "| billing | S-002 conflict | ❌ 409 | trace not saved `"+traceLost+"` | [protocol](partial-billing/S-002-failed-conflict.md) |")
 
 	filled := read("schemes/1-system/system.md")
 	assert.Equal(t, "gateway ──► billing   ❌ 1/2\n"+
-		"S-001: ✅ 200 `0af76519` hop ✅ 200 `0af76519` reason — [protocol](../../protocols/billing/S-001-ok-create.md) [0af76519](../../protocols/traces/"+traceOK+".md)\n"+
+		"S-001: ✅ 200 `0af76519` hop ✅ 200 `0af76519` reason — [protocol](../../protocols/partial-billing/S-001-ok-create.md) [0af76519](../../protocols/traces/"+traceOK+".md)\n"+
 		"S-002: ❌ 409 `4bf92f35` hop ❌ 409 `4bf92f35` reason expected 200 got 409 trace not saved `"+traceLost+"`\n"+
 		"S-404: ⏸ not run\n", filled)
 }
@@ -153,7 +153,7 @@ func TestTraceFetchedByTempoOfUserExecutor(t *testing.T) {
 	w.Testcase(ctx, ts, tc)
 	require.NoError(t, w.Finish(ctx, &venom.Tests{}))
 
-	protocol, err := os.ReadFile(filepath.Join(run, "protocols", "receive-webhook-ok", "SB-01-01-ok-webhook.md"))
+	protocol, err := os.ReadFile(filepath.Join(run, "protocols", "ok-receive-webhook-ok", "SB-01-01-ok-webhook.md"))
 	require.NoError(t, err)
 	assert.Contains(t, string(protocol), "svc-gateway · /v1/supabase/webhook/{integration_hash_ids}")
 	assert.NotContains(t, string(protocol), "trace not saved")

@@ -126,6 +126,11 @@ func ProtocolFileName(name string) string {
 // protocolRowID is the row id a testcase name starts with: SB-01-01, SB-02-01-03, GW-B0005, S-001.
 var protocolRowID = regexp.MustCompile(`^[A-Z][A-Z0-9]*(?:-[A-Z]?[0-9][0-9A-Z]*)+`)
 
+// ProtocolOutcome is the outcome ok, partial or failed of the testcase (section 10), never empty.
+func ProtocolOutcome(tc *TestCase) string {
+	return protocolOutcome(tc)
+}
+
 // ProtocolOutcomeFile is the file name of the protocol of a testcase that ended, with no extension: its outcome ok,
 // partial or failed (section 10) in the name by ProtocolOutcomeName.
 func ProtocolOutcomeFile(tc *TestCase) string {
