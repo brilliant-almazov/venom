@@ -137,8 +137,9 @@ a skipped testcase too: `partial` when some of its assertions held, `failed` oth
   X-Trace-Id, Traceparent, X-Request-Id and X-Build headers and the body verbatim, and the `fact` info lines;
 - `## State after`: every later call of the testcase, the read-back after a write, with its request and answer;
 - `## Trace`: the span tree `<trace_dir>/<trace_id>.md` of that call, looked up in every `trace_dir` and `traces` the
-  steps were given; when that call returned no trace id, the tree of every other step with a trace id and a code, under
-  `- step: N "<name>"` (a teardown whose stand step failed after its calls);
+  steps were given, then the tree of every other step with a trace id of its own and a code, under `- step: N "<name>"`;
+  when that call returned no trace id, the tree of every step with a trace id and a code the same way (a teardown whose
+  stand step failed after its calls);
 - `## Verdict`: ✅, ❌ with every failed assertion of every step, or ⏭ with the skip reason.
 
 A testcase whose call returned a trace id while no tree `<dir>/<trace_id>.md` was saved fails (`traceGate`). The fork is
@@ -659,8 +660,9 @@ the run removes every empty folder left under `<run>`.
 
 - A span tree of a traced call that no step saved is fetched from Tempo before the trace gate, by the `tempo_url` of a
   step of the testcase — `tempo_url` of a native executor or `tempo` of a user executor (`http_call`, `trace_save`) — or
-  its var `tempo_url` or `tempo`, up to 10 s (run 17-7: every step of the case said `tempo`, the tree was never fetched,
-  `TestTraceFetchedByTempoOfUserExecutor`); a trace Tempo does not have makes the line
+  its var `tempo_url` or `tempo`, up to the late wait of the `tempo` executor, 90 s (run 17-7: every step of the case
+  said `tempo`, the tree was never fetched, `TestTraceFetchedByTempoOfUserExecutor`; run 17-12: the tree of the
+  monolith webhook call came after 10 s, `TestEveryStepTraceInProtocol`); with no Tempo address `venom.log` says so; a trace Tempo does not have makes the line
   `- trace not saved: <trace_id>: <folders tried>` under Trace and fails the testcase (section 10, `traceGate`).
 - A call that returns no trace id (the monolith) needs no trace: its Trace section lists every `sql` step of the
   testcase in its place, `- db read: step N "<name>" <status>`, each query and the rows read.

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -160,4 +161,56 @@ func TestTraceFetchedByTempoOfUserExecutor(t *testing.T) {
 	tree, err := os.ReadFile(filepath.Join(run, "protocols", "traces", traceOK+".md"))
 	require.NoError(t, err)
 	assert.Contains(t, string(tree), "svc-gateway")
+}
+
+// traceLate is the trace of the monolith webhook call of run 17-12 (SB-05-01): Tempo had its tree only after 10 s.
+const traceLate = "ad817128211920d3d8990adef0cd4ebc"
+
+// Every http_call step of a user executor with a trace id of its own has its span tree in the protocol, a tree Tempo
+// ingests after 10 s too (run 17-12, SB-05-01 step 1: «trace ad817128… returned by the call has no saved span tree»).
+func TestEveryStepTraceInProtocol(t *testing.T) {
+	ready := time.Now().Add(11 * time.Second)
+	tempo := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		id := filepath.Base(r.URL.Path)
+		if id != traceOK && (id != traceLate || time.Now().Before(ready)) {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = w.Write([]byte(`{"batches":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"svc-` + id[:4] + `"}}]},` +
+			`"scopeSpans":[{"spans":[{"traceId":"` + id + `","spanId":"a","name":"/v1/webhook","startTimeUnixNano":"1","endTimeUnixNano":"2"}]}]}]}`))
+	}))
+	defer tempo.Close()
+
+	step := func(name, id string) venom.TestStepResult {
+		r := call(venom.StatusPass, 200, id, "")
+		r.Name = name
+		r.Interpolated = []byte("type: http_call\ntempo: " + tempo.URL + "\ntraces: \"\"\n")
+
+		return r
+	}
+
+	ts := &venom.TestSuite{Name: "SB-05-01", ShortName: "SB-05-01-monolith-webhook-receive-ok", Filepath: filepath.Join(t.TempDir(), "suite.yml")}
+	ts.TestCases = []venom.TestCase{{TestCaseInput: venom.TestCaseInput{Name: "SB-05-01 webhook"}, Status: venom.StatusPass,
+		TestStepResults: []venom.TestStepResult{step("monolith webhook", traceLate), step("gateway read", traceOK)}}}
+
+	run := filepath.Join(t.TempDir(), "run")
+	w := New(run)
+	ctx := context.Background()
+	tc := &ts.TestCases[0]
+	w.BeforeVerdict(ctx, ts, tc)
+	assert.Empty(t, venom.TracesWithoutTree(tc))
+	w.Testcase(ctx, ts, tc)
+	require.NoError(t, w.Finish(ctx, &venom.Tests{}))
+
+	protocol, err := os.ReadFile(filepath.Join(run, "protocols", "SB-05-01-ok-monolith-webhook-receive-ok", "SB-05-01-ok-webhook.md"))
+	require.NoError(t, err)
+	assert.Contains(t, string(protocol), "svc-ad81 · /v1/webhook")
+	assert.Contains(t, string(protocol), "svc-0af7 · /v1/webhook")
+	assert.NotContains(t, string(protocol), "trace not saved")
+
+	for _, id := range []string{traceLate, traceOK} {
+		tree, err := os.ReadFile(filepath.Join(run, "protocols", "traces", id+".md"))
+		require.NoError(t, err, id)
+		assert.Contains(t, string(tree), "svc-"+id[:4])
+	}
 }
