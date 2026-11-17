@@ -156,6 +156,9 @@ func (v *Venom) runOneTestCase(ctx context.Context, ts *TestSuite, tc *TestCase)
 	var hasRanged bool
 	hasSkipped := len(tc.Skipped) > 0
 	if !hasSkipped {
+		if v.Artifacts != nil {
+			v.Artifacts.Start(ctx, ts, tc)
+		}
 		start := time.Now()
 		tc.Start = start
 		if verboseReport || hasRanged {

@@ -130,7 +130,7 @@ name, `<testcase>.md` (`protocol_outcome.go`). Sections:
   failed · trace id · whether the tested call sent the key's value, with its request. No such line: «no precondition»;
 - `## Request`: the `point` info line, the `call:` line rendered from the step itself (executor, method and url, or rpc,
   or the declared fields; never a script), the step, and what the
-  call sent: method, full url, headers (Authorization masked, X-Idempotency-Key shown) and the body, JSON one key per
+  call sent: method, full url, headers (Authorization `Bearer <secret>`, every credential `<secret>`, X-Idempotency-Key shown) and the body, JSON one key per
   line; a step that is not http shows the call fields of its interpolated step. The call is the step with the `call:`
   info line when the testcase has one, else a step with a trace id and a code: the last failed call, else the last call;
 - `## Response`: the code, the trace id (result.trace_id, meta.trace_id of the body or the X-Trace-Id header), the
@@ -524,21 +524,35 @@ one name in two lib directories: the earlier one in this order wins (the nearer 
 the same lib directory are still an error. Point tests: `TestUserExecutorLibFoundUpFromSuite`,
 `TestUserExecutorNearestLibWins`, `TestUserExecutorSymlinkedLib`, `TestUserExecutorLibStopsAtRepoRoot`.
 
-## 27. Credentials hidden in every output, declared secret or not
+## 27. Credentials hidden in every output, declared secret or not: `<secret>`
 
-The password of a URL with userinfo (`postgresql://postgres:__hidden__@pg-billing…`) and a JWT (`eyJ….….…` becomes
-`__hidden__`) are hidden with no `secrets:` declared: in the vars of the testsuite, of the testcases and of the steps
-(`inputVars`, `computedVars`), in the raw and interpolated steps, systemout, systemerr, info lines and failures, in
-`test_results_*.{json,xml,yml,tap}` and the html report, in the protocols, in `io.jsonl` and in `venom.log` (`log.go`,
-`maskCredentials`). A var with nothing to hide keeps its type. Run 16-4 carried the database DSN and the gateway tokens
-52 times in one result file. Point tests: `TestMaskCredentials`, `TestOutputMasksCredentialsWithNoSecret`.
+Every secret becomes `<secret>` with no `secrets:` declared (`log.go`, `SecretMark`, `maskCredentials`):
+
+| What | Example | Written |
+| -- | -- | -- |
+| a declared secret | `secrets: [token]` | `<secret>` |
+| the password of a URL with userinfo | `postgresql://postgres:s3cr3t@pg-billing…` | `postgresql://postgres:<secret>@pg-billing…` |
+| a JWT | `eyJ….….…` | `<secret>` |
+| a Supabase API key | `sb_publishable_…`, `sb_secret_…` | `<secret>` |
+| the value of a header, field or var named Apikey, X-Api-Key, Api-Key, Cookie, Set-Cookie or holding token, secret, password, passwd | `Apikey: sb_…`, `"access_token":"…"`, `password=…` | `Apikey: <secret>`, `"access_token":"<secret>"` |
+| an Authorization | `Authorization: Bearer abc` | `Authorization: Bearer <secret>`, the scheme kept |
+
+The forms `name: value`, `name=value`, `"name":"value"` and Go's `map[Name:[value]]` are read; a JSON `null`, `true`, `false`
+stays, an unquoted JSON number becomes `"<secret>"`, so a JSON output stays JSON. `X-Idempotency-Key` is no credential
+and is shown. A text hidden twice stays the same. It is applied to the vars of the testsuite, of the testcases and of
+the steps (`inputVars`, `computedVars`), the raw and interpolated steps, systemout, systemerr, info lines and failures,
+`test_results_*.{json,xml,yml,tap}` and the html report, the protocols, the span trees, `io.jsonl`, `venom.log` and
+every file of `--run-dir`. Run 16-4 carried the database DSN and the gateway tokens 52 times in one result file; run 17-5
+carried the Supabase Apikey in `protocols/SB-06-01-…/setup.md:32` and `raw/io.jsonl`. Point tests: `TestMaskCredentials`,
+`TestOutputMasksCredentialsWithNoSecret`, `TestCredentialsBecomeSecretMark`, `TestCredentialInAGoMapOfLists`,
+`runartifacts.TestRunOfEveryOutcome` (no key in any file of the run folder).
 
 ## 28. A log of every call: `<protocol-dir>/io.jsonl`
 
 With `--protocol-dir`, every call of every testcase — a step with `result.statuscode` or `result.code`, whatever its
 outcome — appends one JSON line to `<protocol-dir>/io.jsonl` (`protocol_io.go`): `testsuite`, `file`, `testcase`,
 `step` (1-based), `name`, `executor`, `call` (the call line of the protocol), `method`, `url`, `request_headers`
-(Authorization masked) and `request` (the body) of an http call, else `request` as the declared fields of the step,
+(credentials `<secret>`) and `request` (the body) of an http call, else `request` as the declared fields of the step,
 `code`, `trace_id`, `response_headers`, `response` (the body or systemout), `status`, `errors`, `start`, `duration_s`.
 Testcases and testsuites run in parallel write whole lines. Point test: `TestProtocolIOLines`.
 
@@ -583,17 +597,65 @@ checked. A failure exits 2 as every dry run failure. Point tests: `TestDryRunTes
 `TestDryRunMustBeforeCall`, `TestDryRunCallThenMustGreen`, `TestDryRunPreflightNotChecked`, files of
 `testdata/dryrun-form/`.
 
-## 31. A run laid out in one folder: `--run-dir`
+## 31. A run laid out in one folder: `--run-dir`, everything by Venom, no agent
 
-`venom run --run-dir <run>` writes the run with no copy or packing by hand (package `runartifacts`):
+`venom run --run-dir <run>` writes the whole run — protocols, schemes, report, problems, traces — with no copy, packing
+or drawing by hand (package `runartifacts`):
 
 | Path | What |
 | -- | -- |
-| `<run>/protocols/<testsuite>/<testcase>.md` | the protocol of section 10 for every testcase, whatever its outcome, named by the testcase name as written |
+| `<run>/protocols/<testsuite>/<testcase>.md` | the protocol of section 10 for every testcase, whatever its outcome, named by the testcase name as written, with a `## Links` section after its file line |
 | `<run>/protocols/traces/<trace_id>.md` | the span tree of every traced call of the run (section 13), secrets hidden |
-| `<run>/protocols/INDEX.md` | one row per testcase in testsuite file order: `suite`, `testcase`, `verdict` (✅/❌/⏸ and the answer code), `trace` (a link to the tree, `trace not saved <trace_id>`, or `—` for a call with no trace), `link` to the protocol |
-| `<run>/schemes/` | the `schemes/` folder of the testsuite set with every anchor filled (below) |
+| `<run>/protocols/INDEX.md` | one row per testcase in testsuite file order: `suite`, `testcase`, `verdict` (✅/❌/⏸ and the answer code, or `⏸ interrupted`, `⏸ not run`, `⏸ pending`), `trace` (a link to the tree, `trace not saved <trace_id>`, or `—` for a call with no trace), `link` to the protocol, `scenario` (`<file>:<line>`), `scheme` of the case |
+| `<run>/schemes/SYSTEM.md` | the scheme of the system: every path, every case of it and every transition of the case, drawn from the run; the paths; the checked cases |
+| `<run>/schemes/<path>/PATH.md` | the scheme of one path: its cases with their transitions; the checked cases |
+| `<run>/schemes/<path>/<testcase>.md` | the scheme of one case: its transitions drawn, the table of the transitions, how the case works |
+| `<run>/REPORT.md` | the verdict and the counts of the run, start and end, the reason a run ended early, every path, every trace id with its tree |
+| `<run>/PROBLEMS.md` | every testcase that did not pass — failed, skipped, interrupted, not run — with its first failed step, the reason, the scenario line, the protocol, the scheme and the trace |
 | `<run>/raw/` | every other output of Venom: the reports, `venom.log`, dumps, `io.jsonl` (section 28), the traces fetched from Tempo; `--run-dir` replaces `--output-dir` |
+
+A path is the folder of a testsuite file (`scenarios/supabase/<path>/SB-NN-NN-*.yml`), named by its last element; two
+paths of one last element are named by their whole folder as a slug. A transition is a step of the testcase: its
+number, name and request, then ok ✅ / not-ok ❌ / not run ⏸ with the answer code and the first 8 characters of the trace
+id, and the reason on the next line when it is not ok. A step after a failed `Must…` is drawn as
+`⏸ not run: the testcase stopped before this step`; a testcase skipped by its `skip:` draws each step as skipped.
+
+```text
+SB-01-01-02 read link · ❌ 409 `4bf92f35`
+├─ 1 call · http POST https://… ─► ❌ 409 `4bf92f35`
+│     reason: expected 200 got 409
+└─ 2 check · check ─► ⏸
+      reason: not run: the testcase stopped before this step
+```
+
+Each scheme lists its checked cases with how each works: `testcase`, `path`, `verdict`, `request` (the call line of
+section 10), `expected` (the info lines `happens`, `expect`, `right`, `norm`), `transitions` (`1 ✅ · 2 ❌ · 3 ⏸`),
+`scenario`, `protocol`, `scheme`, `trace`.
+
+**Links both ways.** system → path → case → protocol and back: SYSTEM.md links each path scheme and each case scheme;
+PATH.md links SYSTEM.md, INDEX.md and each case; the case scheme links its path, the system, the protocol, the scenario
+line of the testcase and of each step and every trace id with its tree; the protocol links the scenario line of the
+testcase and of its call, every trace id (32 hex) with its tree, the schemes of its case, its path and the system, the
+index, the report and the problems. A scenario line is written `<file>:<line>` and links `<file>#L<line>`.
+
+**Every outcome, written as it happens.** A protocol is written the moment its testcase ends, and INDEX.md, REPORT.md,
+PROBLEMS.md, SYSTEM.md, the scheme of its path and of its case are redrawn with it:
+
+| Outcome | Protocol and verdict |
+| -- | -- |
+| passed, failed on Should or Must, a setup testcase failed, a precondition failed, a step timed out | the protocol of section 10, ✅ or ❌ |
+| steps not run after a failed Must | the protocol of section 10; each step not run is `⏸ not run` in the scheme |
+| skipped by `skip:` or by `--stop-on-failure` | the protocol of section 10, ⏭ / ⏸ |
+| a testcase under way when the run is killed (SIGKILL too) | written as `⏸ interrupted: the run ended before the testcase did` the moment it starts, replaced when it ends |
+| interrupted by SIGINT or SIGTERM | the testcase under way `⏸ interrupted: interrupted by signal <name>`, every testcase not started `⏸ not run: …`; exit 128 + the signal number |
+| the run stopped by an error of its setup (YAML, vars, a testsuite that cannot start) or of the report | every testcase `⏸ not run: setup failed: …` / `run stopped: …`; REPORT.md and PROBLEMS.md carry the error |
+| the runner panics | every testcase not ended `⏸ … runner crashed: panic: …`, then the panic goes on; a panic inside a testcase run in parallel ends the process at once, and the folder holds what was written as each testcase began and ended |
+
+Every testcase of the parsed testsuites is in INDEX.md from the start of the run, `⏸ pending` until it starts.
+
+**No empty folder.** A folder is made only with its first file: the `tempo` step and the trace fetch make the trace
+folder only when a trace is saved (run 17-4 left an empty `raw/identifier-link/` and no `protocols/`), and the end of
+the run removes every empty folder left under `<run>`.
 
 - A span tree of a traced call that no step saved is fetched from Tempo before the trace gate, by the `tempo_url` of a
   step of the testcase or its var `tempo_url`, up to 10 s; a trace Tempo does not have makes the line
@@ -606,12 +668,12 @@ checked. A failure exits 2 as every dry run failure. Point tests: `TestDryRunTes
   sent, the answer and the trace (runs 17-1…17-3 lost them, `keepUserExecutorCall`). The output of an executor that
   passed is laid over it, its keys win.
 
-Schemes are drawn by the case set, not by Venom: the first `schemes/` folder met going up from a testsuite file, else,
-when the testsuites live apart from the schemes, `<run>/../../../schemes` (a run folder `<set>/runs/<YYYY-MM>/<DD-n>`
-next to `<set>/schemes`), is copied to `<run>/schemes/` file by file, and only its anchors are replaced; the rest of the
-text stays as it is. `<case>` is a testcase name, or the row id its name or the name of its testsuite starts with,
-followed by a space, `-`, `_`, `:`, `·` or `.` (`SB-01-02`); of several testcases of one case the first failed one
-counts. `<hop>` is the key of a step info line `hop: <key>` (`hop: seed-<key>` for a seed step).
+Scheme templates of a case set, when one still has them: the first `schemes/` folder met going up from a testsuite
+file, else `<run>/../../../schemes` (a run folder `<set>/runs/<YYYY-MM>/<DD-n>` next to `<set>/schemes`), is copied to
+`<run>/schemes/` file by file with only its anchors replaced. `<case>` is a testcase name, or the row id its name or the
+name of its testsuite starts with, followed by a space, `-`, `_`, `:`, `·` or `.` (`SB-01-02`); of several testcases of
+one case the first failed one counts. `<hop>` is the key of a step info line `hop: <key>` (`hop: seed-<key>` for a seed
+step).
 
 | Anchor | Filled with |
 | -- | -- |
@@ -623,8 +685,10 @@ counts. `<hop>` is the key of a step info line `hop: <key>` (`hop: seed-<key>` f
 | `⟦<case>:trace⟧` | a link to the span tree, `trace not saved <trace_id>`, or `—` |
 
 A case the run does not have gives ⏸ (`not run` for a reason, `—` for a link). Point tests:
-`runartifacts/writer_test.go` (`TestRunFolder`, `TestSchemesOfTheCaseSet`), `TestUserExecutorCallKeptOnFailure`,
-`TestProtocolDBReadsInPlaceOfTrace`.
+`runartifacts/writer_test.go` (`TestRunFolder`, `TestSchemesOfTheCaseSet`), `runartifacts/outcomes_test.go`
+(`TestKilledRunLeavesInterrupted`, `TestAbortedRunNamesEveryTestcase`, `TestSetupFailureWritesTheRunFolder`,
+`TestSchemesDrawnFromTheRun`, `TestNoEmptyFolders`), `runartifacts/run_test.go` (`TestRunOfEveryOutcome`: a whole run
+of pass, Should, Must and skip), `TestUserExecutorCallKeptOnFailure`, `TestProtocolDBReadsInPlaceOfTrace`.
 
 ## Build
 

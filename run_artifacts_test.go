@@ -17,6 +17,8 @@ type viewRecorder struct {
 	views  map[string]ProtocolView
 }
 
+func (r *viewRecorder) Start(context.Context, *TestSuite, *TestCase) {}
+
 func (r *viewRecorder) BeforeVerdict(context.Context, *TestSuite, *TestCase) {
 	r.mu.Lock()
 	defer r.mu.Unlock()

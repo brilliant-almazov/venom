@@ -8,13 +8,16 @@ import (
 )
 
 // indexHeader is the table of protocols/INDEX.md, one row per testcase.
-const indexHeader = "| suite | testcase | verdict | trace | link |\n| -- | -- | -- | -- | -- |\n"
+const indexHeader = "| suite | testcase | verdict | trace | link | scenario | scheme |\n| -- | -- | -- | -- | -- | -- | -- |\n"
 
 // noTree is the trace cell of a call whose trace id has no span tree in Tempo.
 const noTree = "trace not saved"
 
-// protocolLink is the text of a link to a protocol.
-const protocolLink = "protocol"
+// The texts of a link to a protocol and to a scheme.
+const (
+	protocolLink = "protocol"
+	wordScheme   = "scheme"
+)
 
 // sortRows puts the testcases in testsuite file order, then in their order in the testsuite.
 func sortRows(rows []row) {
@@ -27,17 +30,26 @@ func sortRows(rows []row) {
 	})
 }
 
-func (w *Writer) writeIndex() error {
-	base := filepath.Join(w.dir, ProtocolsDir)
+// writeIndex writes protocols/INDEX.md: one row per testcase with its verdict, trace, protocol, scenario line and scheme.
+func (l layout) writeIndex() error {
+	base := filepath.Dir(l.index())
 	var b strings.Builder
-	b.WriteString("# Protocols\n\n" + indexHeader)
+	b.WriteString("# Protocols\n\n")
+	b.WriteString(link(ReportFile, base, l.report()) + " · " + link(ProblemsFile, base, l.problems()) + " · " +
+		link(SystemFile, base, l.systemScheme()) + "\n\n" + indexHeader)
 
-	for _, r := range w.rows {
-		fmt.Fprintf(&b, "| %s | %s | %s | %s | %s |\n", cell(r.suite), cell(r.testcase), verdict(r.view.Mark, r.view.Code),
-			traceCell(base, r), link(protocolLink, base, r.protocol))
+	for _, r := range l.rows {
+		protocol := noValue
+
+		if written(r) {
+			protocol = link(protocolLink, base, r.protocol)
+		}
+
+		fmt.Fprintf(&b, "| %s | %s | %s | %s | %s | %s | %s |\n", cell(r.suite), cell(r.testcase), verdictOf(r),
+			traceCell(base, r), protocol, scenarioLink(base, r, r.view.Line), link(wordScheme, base, l.caseScheme(r)))
 	}
 
-	return writeFile(filepath.Join(base, IndexFile), []byte(b.String()))
+	return writeFile(l.index(), []byte(b.String()))
 }
 
 // verdict is the mark with the answer code, when the call had one.
@@ -75,12 +87,17 @@ func short(id string) string {
 
 // link is a markdown link to file relative to the folder from.
 func link(text, from, file string) string {
+	return "[" + text + "](" + relTarget(from, file) + ")"
+}
+
+// relTarget is the target of a link to file relative to the folder from.
+func relTarget(from, file string) string {
 	rel, err := filepath.Rel(from, file)
 	if err != nil {
 		rel = file
 	}
 
-	return "[" + text + "](" + strings.ReplaceAll(filepath.ToSlash(rel), " ", "%20") + ")"
+	return strings.ReplaceAll(filepath.ToSlash(rel), " ", "%20")
 }
 
 func cell(s string) string {

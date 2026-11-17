@@ -48,7 +48,7 @@ func (w *Writer) schemeFolders() []string {
 	var dirs []string
 	seen := map[string]bool{}
 
-	for _, r := range w.rows {
+	for _, r := range w.layout().rows {
 		if r.schemes == "" || seen[r.schemes] {
 			continue
 		}
@@ -87,7 +87,7 @@ func (w *Writer) fillFolder(src string) error {
 		}
 
 		to := filepath.Join(w.dir, SchemesDir, rel)
-		filled := fill{rows: w.rows, from: filepath.Dir(to)}.text(string(body))
+		filled := fill{rows: w.layout().rows, from: filepath.Dir(to)}.text(string(body))
 
 		return writeFile(to, []byte(filled))
 	})

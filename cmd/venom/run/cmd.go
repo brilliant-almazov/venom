@@ -413,6 +413,9 @@ var Cmd = &cobra.Command{
 			v.Artifacts = artifacts
 			v.OutputDir = artifacts.RawPath()
 		}
+		folder := runFolder{writer: artifacts}
+		defer folder.onCrash()
+		folder.onSignal()
 		v.LibDir = libDir
 		v.OutputFormat = format
 		v.StopOnFailure = stopOnFailure
@@ -423,8 +426,8 @@ var Cmd = &cobra.Command{
 		v.Verbose = verbose
 
 		if err := v.InitLogger(); err != nil {
-			fmt.Fprintf(os.Stderr, "%v\n", err)
-			venom.OSExit(2)
+			folder.fail("setup failed", err)
+			return nil
 		}
 
 		if v.Verbose == 3 {
@@ -456,8 +459,8 @@ var Cmd = &cobra.Command{
 			}
 			fi, err := os.Open(f)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "unable to open var-from-file %s: %v\n", f, err)
-				venom.OSExit(2)
+				folder.fail("setup failed", fmt.Errorf("unable to open var-from-file %s: %v", f, err))
+				return nil
 			}
 			defer fi.Close()
 			readers = append(readers, fi)
@@ -465,14 +468,18 @@ var Cmd = &cobra.Command{
 
 		mapvars, err := readInitialVariables(context.Background(), variables, readers, os.Environ())
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "%v\n", err)
-			venom.OSExit(2)
+			folder.fail("setup failed", err)
+			return nil
 		}
 		v.AddVariables(mapvars)
 
-		if err := v.Parse(context.Background(), path); err != nil {
-			fmt.Fprintf(os.Stderr, "%v\n", err)
-			venom.OSExit(2)
+		err = v.Parse(context.Background(), path)
+		if artifacts != nil && !v.DryRun {
+			artifacts.Plan(&v.Tests)
+		}
+		if err != nil {
+			folder.fail("setup failed", err)
+			return nil
 		}
 
 		if v.DryRun {
@@ -482,13 +489,14 @@ var Cmd = &cobra.Command{
 		}
 
 		if err := v.Process(context.Background(), path); err != nil {
-			fmt.Fprintf(os.Stderr, "%v\n", err)
-			venom.OSExit(2)
+			_ = v.OutputResult()
+			folder.fail("run stopped", err)
+			return nil
 		}
 
 		if err := v.OutputResult(); err != nil {
-			fmt.Fprintf(os.Stderr, "%v\n", err)
-			venom.OSExit(2)
+			folder.fail("report failed", err)
+			return nil
 		}
 
 		if artifacts != nil {
