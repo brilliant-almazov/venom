@@ -31,6 +31,21 @@ func findSchemes(suiteFile string) string {
 // fillSchemes copies every scheme folder of the run to <run>/schemes with each anchor replaced by the run (anchors.go);
 // the rest of the text is kept as it is.
 func (w *Writer) fillSchemes(ctx context.Context) error {
+	for _, dir := range w.schemeFolders() {
+		if err := w.fillFolder(dir); err != nil {
+			venom.Error(ctx, "unable to fill the schemes of %s: %v", dir, err)
+			return err
+		}
+	}
+
+	return nil
+}
+
+// schemeFolders are the schemes folders found up from the testsuite files; with none, the schemes folder of the case
+// set the run folder belongs to, <set>/schemes for a run folder <set>/runs/<YYYY-MM>/<DD-n>, when the testsuites live
+// in another repository than the schemes.
+func (w *Writer) schemeFolders() []string {
+	var dirs []string
 	seen := map[string]bool{}
 
 	for _, r := range w.rows {
@@ -39,11 +54,17 @@ func (w *Writer) fillSchemes(ctx context.Context) error {
 		}
 
 		seen[r.schemes] = true
+		dirs = append(dirs, r.schemes)
+	}
 
-		if err := w.fillFolder(r.schemes); err != nil {
-			venom.Error(ctx, "unable to fill the schemes of %s: %v", r.schemes, err)
-			return err
-		}
+	if len(dirs) > 0 {
+		return dirs
+	}
+
+	set := filepath.Join(w.dir, "..", "..", "..", SchemesDir)
+
+	if st, err := os.Stat(set); err == nil && st.IsDir() {
+		return []string{set}
 	}
 
 	return nil

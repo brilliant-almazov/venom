@@ -61,15 +61,15 @@ func (f fill) value(parts []string) string {
 	}
 }
 
-// find is the testcase of the run named key or whose name starts with key and a separator (the row id S-001, GW-B0005);
-// of several, the first failed one, else the first.
+// find is the testcase of the run named key or whose name, or the name of its testsuite, starts with key and a
+// separator (the row id SB-01-02, S-001, GW-B0005); of several, the first failed one, else the first.
 func (f fill) find(key string) *row {
 	var found *row
 
 	for i := range f.rows {
 		r := &f.rows[i]
 
-		if !named(r.testcase, key) {
+		if !named(r.testcase, key) && !named(r.suite, key) {
 			continue
 		}
 

@@ -606,10 +606,12 @@ checked. A failure exits 2 as every dry run failure. Point tests: `TestDryRunTes
   sent, the answer and the trace (runs 17-1…17-3 lost them, `keepUserExecutorCall`). The output of an executor that
   passed is laid over it, its keys win.
 
-Schemes are drawn by the testsuite set, not by Venom: the first `schemes/` folder met going up from a testsuite file is
-copied to `<run>/schemes/` file by file, and only its anchors are replaced; the rest of the text stays as it is.
-`<case>` is a testcase name or its row id (the name starts with it and a space, `-`, `_`, `:`, `·` or `.`); `<hop>` is
-the key of a step info line `hop: <key>`.
+Schemes are drawn by the case set, not by Venom: the first `schemes/` folder met going up from a testsuite file, else,
+when the testsuites live apart from the schemes, `<run>/../../../schemes` (a run folder `<set>/runs/<YYYY-MM>/<DD-n>`
+next to `<set>/schemes`), is copied to `<run>/schemes/` file by file, and only its anchors are replaced; the rest of the
+text stays as it is. `<case>` is a testcase name, or the row id its name or the name of its testsuite starts with,
+followed by a space, `-`, `_`, `:`, `·` or `.` (`SB-01-02`); of several testcases of one case the first failed one
+counts. `<hop>` is the key of a step info line `hop: <key>` (`hop: seed-<key>` for a seed step).
 
 | Anchor | Filled with |
 | -- | -- |
@@ -621,7 +623,7 @@ the key of a step info line `hop: <key>`.
 | `⟦<case>:trace⟧` | a link to the span tree, `trace not saved <trace_id>`, or `—` |
 
 A case the run does not have gives ⏸ (`not run` for a reason, `—` for a link). Point tests:
-`runartifacts/writer_test.go` (`TestRunFolder`), `TestUserExecutorCallKeptOnFailure`,
+`runartifacts/writer_test.go` (`TestRunFolder`, `TestSchemesOfTheCaseSet`), `TestUserExecutorCallKeptOnFailure`,
 `TestProtocolDBReadsInPlaceOfTrace`.
 
 ## Build

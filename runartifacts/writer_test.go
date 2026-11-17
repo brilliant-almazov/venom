@@ -92,3 +92,28 @@ func TestRunFolder(t *testing.T) {
 		"S-002: ❌ 409 `4bf92f35` hop ❌ 409 `4bf92f35` reason expected 200 got 409 trace not saved `"+traceLost+"`\n"+
 		"S-404: ⏸ not run\n", filled)
 }
+
+// The schemes live with the case set, not with the testsuites: <set>/schemes for a run folder <set>/runs/<YYYY-MM>/<DD-n>;
+// a case is found by the row id at the start of its testsuite name too.
+func TestSchemesOfTheCaseSet(t *testing.T) {
+	root := t.TempDir()
+	set := filepath.Join(root, "cases", "supabase")
+	require.NoError(t, os.MkdirAll(filepath.Join(set, SchemesDir, "3-cases"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(set, SchemesDir, "3-cases", "SB-01-02.md"), []byte("⟦SB-01-02⟧ ⟦SB-01-02:monolith-db⟧"), 0o644))
+
+	ts := &venom.TestSuite{Name: "SB-01-02 sign up", ShortName: "sign-up", Filepath: filepath.Join(root, "scenarios", "suite.yml")}
+	r := call(venom.StatusPass, 200, "", "")
+	r.ComputedInfo = []string{"hop: monolith-db"}
+	ts.TestCases = []venom.TestCase{{TestCaseInput: venom.TestCaseInput{Name: "user row"}, Status: venom.StatusPass,
+		TestStepResults: []venom.TestStepResult{r}}}
+
+	run := filepath.Join(set, "runs", "2026-11", "17-4")
+	w := New(run)
+	ctx := context.Background()
+	w.Testcase(ctx, ts, &ts.TestCases[0])
+	require.NoError(t, w.Finish(ctx, &venom.Tests{}))
+
+	body, err := os.ReadFile(filepath.Join(run, SchemesDir, "3-cases", "SB-01-02.md"))
+	require.NoError(t, err)
+	assert.Equal(t, "✅ 200 ✅ 200", string(body))
+}
