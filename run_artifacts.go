@@ -94,15 +94,24 @@ func TracesWithoutTree(tc *TestCase) []string {
 	return ids
 }
 
-// TempoURL is the tempo_url of the first step that has one, else the var tempo_url of the testcase.
+// tempoKeys name the Tempo address: tempo_url of the native executors, tempo of the user executors (http_call,
+// trace_save) and of the suite var (run 17-7: every step of the case said tempo, the trace was never fetched).
+var tempoKeys = []string{"tempo_url", "tempo"}
+
+// TempoURL is the tempo_url or tempo of the first step that has one, else the var tempo_url or tempo of the testcase.
 func TempoURL(tc *TestCase) string {
 	for i := range tc.TestStepResults {
-		if u := protocolField(protocolStep(&tc.TestStepResults[i])["tempo_url"]); u != "" {
-			return u
+		m := protocolStep(&tc.TestStepResults[i])
+		for _, k := range tempoKeys {
+			if u := protocolField(m[k]); u != "" {
+				return u
+			}
 		}
 	}
-	if u, ok := tc.Vars["tempo_url"]; ok && u != nil {
-		return fmt.Sprint(u)
+	for _, k := range tempoKeys {
+		if u, ok := tc.Vars[k]; ok && u != nil && fmt.Sprint(u) != "" {
+			return fmt.Sprint(u)
+		}
 	}
 	return ""
 }
