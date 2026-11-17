@@ -113,7 +113,7 @@ func TestFixesFolderPerService(t *testing.T) {
 	problems := read(ProblemsFile)
 	assert.Regexp(t, `\| SB-03-01-02 create again \|.*\| `+regexp.QuoteMeta(billingFix)+` \|`, problems)
 	assert.Regexp(t, `\| SB-03-01-03 monolith \|.*\| `+regexp.QuoteMeta(unknownFix)+` \|`, problems)
-	assert.Contains(t, read(ReportFile), "| ❌ 0/3 | "+billingFix+"; "+unknownFix+" |")
+	assert.Contains(t, read(ReportFile), "| ❌ 0/3 | "+emptyBar+" | "+billingFix+"; "+unknownFix+" |")
 }
 
 // A red testcase with no fix file is refused: the report and the problems are not written without it.

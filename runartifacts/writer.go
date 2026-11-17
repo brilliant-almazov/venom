@@ -55,6 +55,8 @@ type Writer struct {
 	end    time.Time
 	runErr string
 	closed bool
+	// past are the earlier runs of the set the zoom set draws the history of, read once (history).
+	past   *archive
 }
 
 // row is one testcase of the run as the protocols, the index, the schemes and the report read it.
@@ -71,6 +73,8 @@ type row struct {
 	fixer fixer
 	// outcome is ok, partial or failed of the protocol, failed until the testcase ends with one of its own.
 	outcome string
+	// points are the entries and exits of the processes its traces went through (tempo.Points).
+	points []tempo.Point
 }
 
 // New is the writer of the run folder dir.

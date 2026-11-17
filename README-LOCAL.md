@@ -611,7 +611,12 @@ or drawing by hand (package `runartifacts`):
 | `<run>/schemes/SYSTEM.md` | the scheme of the system: every path, every case of it and every transition of the case, drawn from the run; the paths; the checked cases; the system and each path carry the share of the outcomes |
 | `<run>/schemes/<path>/PATH.md` | the scheme of one path: its cases with their transitions, with the share of the outcomes; the checked cases |
 | `<run>/schemes/<path>/<testcase>.md` | the scheme of one case: its outcome and the share of its transitions ✅ / ❌ / ⏸ in %, its transitions drawn, the table of the transitions, how the case works |
-| `<run>/REPORT.md` | the verdict and the counts of the run, start and end, the reason a run ended early, every path, every testsuite with a link to its protocols folder and, for a red one, the services to fix (`fix in`), each linked to its fix file, every slice of the scheme — system, path, case — with its link, verdict and share, every trace id with its tree; every count of testcases, in REPORT.md and the schemes, is followed by the share of the outcomes `ok N% · partial N% · failed N%` in whole % |
+| `<run>/schemes/INDEX.md` | the zoom set top-down, each with its bar: `00-run.md`, `01-system.md`, every `02-paths/<path>.md` and under it every `03-suites/<testsuite>.md`, then SYSTEM.md and every PATH.md |
+| `<run>/schemes/00-run.md` | the run total with its bar, every path and testsuite with theirs, and the history of the run: every earlier run of the same set (`<set>/runs/<YYYY-MM>/<DD-n>` with a REPORT.md, before this one by the numbers of its name) with its bar, Δ p.p. and Δ abs. of ok against the run before |
+| `<run>/schemes/01-system.md` | every node the steps touch — an http or grpc host with its methods and paths, an sql database (driver and name, never the credentials) with its tables, any other executor with its calls — with its bar, red marked (`◄ red`); the processes the traces went through; the nodes; the edges in call order, from the node of a step to the node of the next step of the same testcase, `venom` first |
+| `<run>/schemes/02-paths/<path>.md` | the path with its bar and history, its processes, every testsuite of it with its bar, its testcases with the bar of their steps and the history of the testsuite |
+| `<run>/schemes/03-suites/<testsuite>.md` | the testsuite with its bar, history and processes, then every testcase: verdict, outcome, bar of its steps, scenario line, protocol, scheme, every trace id, its steps drawn — executor, method and url, database, the SQL text verbatim line by line, every assertion, the trace id, the reason of a step not ok — its processes, and the table of its steps |
+| `<run>/REPORT.md` | the verdict and the counts of the run, start and end, the reason a run ended early, every path, every testsuite with a link to its protocols folder and, for a red one, the services to fix (`fix in`), each linked to its fix file, every slice of the scheme — system, path, case — with its link, verdict and share, every trace id with its tree; the verdict line and every row of `## Paths` and `## Testsuites` carry the progress bar of the block, the row in its own `bar` column right after `verdict`; every count of testcases, in REPORT.md and the schemes, is followed by the share of the outcomes `ok N% · partial N% · failed N%` in whole % |
 | `<run>/PROBLEMS.md` | every testcase that did not pass — failed, skipped, interrupted, not run — with its first failed step, the reason, the scenario line, the protocol, the scheme, the trace and `fix in`, linked to its fix file: the service and the span of the deepest failed span of its traces — OTLP status error or a gRPC status code not OK (`tempo.Culprit`) — else `not established (<reason>)`: no trace id, no span tree saved, no span failed, the testcase did not end; the protocol of a testcase that did not pass carries the same line `fix in: <service> · <span>` above `## Links` |
 | `<run>/fixes/INDEX.md`, `<run>/fixes/<service>/INDEX.md`, `<run>/fixes/<service>/<NN>-<testcase>.md` | the fixes of the run, one folder per service to fix (`fix in`, named by its `service.name` as a slug) and one file per fix: a fix is one red testcase, or one cause shared by several — the same service and span to fix and the same reason of the first failed step — with the list of its testcases; the file says where (the service, the span of the failure, every trace id with a link to its span tree), what to do (per testcase: the failed step with its scenario line, the call, `expected` from the info lines happens / expect / right, `got` — the mark, the answer code and the reason — and the body the step answered, secrets hidden), why (the `norm` lines of each testcase with the scenario line of the testcase, `the scenario names no norm` without one) and the links to the protocols, the schemes, REPORT.md, PROBLEMS.md and the indexes; a testcase whose service is not established lies in `fixes/not-established/` with the reason; `fixes/INDEX.md` is every service with its count of fixes and testcases, `fixes/<service>/INDEX.md` every fix with its testcases, step and reason; the `fix in` cell of every red testcase of PROBLEMS.md and REPORT.md links its fix file, and a red testcase with no fix file refuses the write of both (`testcase <name> did not pass and has no fix file`) |
 | `<run>/raw/` | every other output of Venom: the reports, `venom.log`, dumps, `io.jsonl` (section 28), the traces fetched from Tempo; `--run-dir` replaces `--output-dir` |
@@ -634,6 +639,31 @@ Each scheme lists its checked cases with how each works: `testcase`, `path`, `ve
 section 10), `expected` (the info lines `happens`, `expect`, `right`, `norm`), `transitions` (`1 ✅ · 2 ❌ · 3 ⏸`),
 `scenario`, `protocol`, `scheme`, `trace`.
 
+**Progress bar.** One form for every block — run, path, testsuite, node, point of a process — and every executor:
+`[██████████████████▒░] 91 %`, 20 cells of ok █, partial ▒ and failed ░ (a testcase not ended counts failed) shared by
+the largest remainder method, ties to ok, then partial; a share that is not zero has a cell at least, taken from the
+share with the most cells; the number is the ok share rounded half up. The denominator is the testcases of the block;
+the bar of a testcase counts its steps: passed █, not run ▒, failed ░. A bar in a scheme is followed by the verdict
+`❌ 80/88`.
+
+**Processes, entries and exits.** From the Tempo JSON of every saved span tree (`tempo.Points`): a process is the
+`service.name` of a span — a server, a worker, a consumer, a cron; an entry (`in`) is an http route or a gRPC method it
+serves, a queue it consumes; an exit (`out`) a gRPC or http call, a queue it publishes to, a table it reads (`SELECT`)
+or writes (any other statement) from `db.query.text`; a span with no parent and none of these is a job (`run`). Each
+point carries the testcases that cover it, their bar, the failed spans on it and its history: its ok share in the same
+zoom file of every earlier run that has it, with Δ p.p. against the run before.
+
+```text
+cgw-billing-server  [████████████████████] 100 %  ✅ 1/1
+├─ in  grpc billing.v1.Accounts/Create  [████████████████████] 100 %  ✅ 1/1  ◄ red  · SB-03-01-01
+├─ out table account written  [████████████████████] 100 %  ✅ 1/1  · SB-03-01-01
+└─ out queue billing.account.created  [████████████████████] 100 %  ✅ 1/1  · SB-03-01-01
+```
+
+The zoom set is written again after every finished testcase and when the run ends, the same for every set the run is
+given (supabase, billing, crawler): it reads only the run folder and the REPORT.md and zoom files of the earlier runs.
+Point tests: `TestProgress`, `TestReadReport`, `TestZoomSet`, `TestPointHistory`, `TestRunBefore`.
+
 **Links both ways.** system → path → case → protocol and back: SYSTEM.md links each path scheme and each case scheme;
 PATH.md links SYSTEM.md, INDEX.md and each case; the case scheme links its path, the system, the protocol, the scenario
 line of the testcase and of each step and every trace id with its tree; the protocol links the scenario line of the
@@ -641,7 +671,7 @@ testcase and of its call, every trace id (32 hex) with its tree, the schemes of 
 index, the report and the problems. A scenario line is written `<file>:<line>` and links `<file>#L<line>`.
 
 **Every outcome, written as it happens.** A protocol is written the moment its testcase ends, and INDEX.md, REPORT.md,
-PROBLEMS.md, SYSTEM.md, the scheme of its path and of its case are redrawn with it:
+PROBLEMS.md, SYSTEM.md, the scheme of its path and of its case and the zoom set are redrawn with it:
 
 | Outcome | Protocol and verdict |
 | -- | -- |
