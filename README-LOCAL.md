@@ -718,10 +718,16 @@ step).
 | `⟦*:<hop>⟧` | the hop over every testcase that has it: ✅ when all passed, else ❌, then passed/all |
 | `⟦<case>:protocol⟧` | a link to the protocol, relative to the scheme file |
 | `⟦<case>:trace⟧` | a link to the span tree, `trace not saved <trace_id>`, or `—` |
+| `⟦<case>:bar⟧` | the progress bar of the case: of one testcase the bar of its steps and its verdict, `[████████████████████] 100 %  ✅ 201` |
+| `⟦<case> <case> …:bar⟧` | the progress bar of a node over the case ids it carries, apart by spaces or commas: the bar of their testcases and passed of all, `[██████████░░░░░░░░░░] 50 %  ❌ 1/2` |
 
-A case the run does not have gives ⏸ (`not run` for a reason, `—` for a link). Point tests:
+The scheme is drawn at intake; venom draws none of its own then. When a set has a scheme folder, venom writes no
+SYSTEM.md, PATH.md, case scheme or zoom set: it only copies the scheme folder to `<run>/schemes/` with its anchors and
+progress bars filled, after every testcase and when the run ends. A set with no scheme folder keeps the schemes drawn
+from the run above. A case the run does not have gives ⏸ (`not run` for a reason, `—` for a link); its bar counts it
+failed. Point tests:
 `runartifacts/writer_test.go` (`TestRunFolder`, `TestSchemesOfTheCaseSet`), `runartifacts/outcomes_test.go`
-(`TestKilledRunLeavesInterrupted`, `TestAbortedRunNamesEveryTestcase`, `TestSetupFailureWritesTheRunFolder`,
+(`TestSchemeBarsAfterEveryTestcase` in writer_test.go; `TestKilledRunLeavesInterrupted`, `TestAbortedRunNamesEveryTestcase`, `TestSetupFailureWritesTheRunFolder`,
 `TestSchemesDrawnFromTheRun`, `TestNoEmptyFolders`), `runartifacts/run_test.go` (`TestRunOfEveryOutcome`: a whole run
 of pass, Should, Must and skip), `TestUserExecutorCallKeptOnFailure`, `TestProtocolDBReadsInPlaceOfTrace`.
 

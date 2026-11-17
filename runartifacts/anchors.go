@@ -20,6 +20,7 @@ const (
 	wordProto   = "protocol"
 	wordTrace   = "trace"
 	wordNotRun  = "not run"
+	wordBar     = "bar"
 	noValue     = "—"
 	caseIDBound = " -_:·."
 )
@@ -52,6 +53,9 @@ func (f fill) value(parts []string) string {
 
 	case len(parts) == 2 && parts[1] == wordTrace:
 		return f.traceValue(r)
+
+	case len(parts) == 2 && parts[1] == wordBar:
+		return f.barValue(parts[0])
 
 	case len(parts) == 3 && parts[2] == wordReason:
 		return f.reasonValue(r, parts[1])
@@ -94,6 +98,28 @@ func named(name, key string) bool {
 	next, _ := utf8.DecodeRuneInString(name[len(key):])
 
 	return strings.ContainsRune(caseIDBound, next)
+}
+
+// barValue is the progress bar of a node or a case of the scheme drawn at intake, keys its case ids apart by spaces or
+// commas: of one testcase the bar of its steps and its verdict, of several the bar of the testcases and passed of all.
+func (f fill) barValue(keys string) string {
+	var rows []row
+	seen := map[int]bool{}
+
+	for _, key := range strings.FieldsFunc(keys, func(r rune) bool { return r == ' ' || r == ',' }) {
+		for i := range f.rows {
+			if !seen[i] && (named(f.rows[i].testcase, key) || named(f.rows[i].suite, key)) {
+				seen[i] = true
+				rows = append(rows, f.rows[i])
+			}
+		}
+	}
+
+	if len(rows) == 1 {
+		return progress(stepCount(rows[0])) + "  " + verdictOf(rows[0])
+	}
+
+	return bar(countOf(rows))
 }
 
 func (f fill) caseValue(r *row) string {

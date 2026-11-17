@@ -122,6 +122,44 @@ func TestSchemesOfTheCaseSet(t *testing.T) {
 	assert.Equal(t, "✅ 200 ✅ 200", string(body))
 }
 
+// The scheme drawn at intake gets its progress bars after every testcase: a node over several case ids counts their
+// testcases, a case of one testcase the steps of it; a case the run has not reached yet is failed.
+func TestSchemeBarsAfterEveryTestcase(t *testing.T) {
+	root := t.TempDir()
+	set := filepath.Join(root, "cases", "billing")
+	require.NoError(t, os.MkdirAll(filepath.Join(set, SchemesDir), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(set, SchemesDir, "SYSTEM.md"),
+		[]byte("billing ⟦BL-01-01 BL-01-02:bar⟧\n├─ BL-01-01 ⟦BL-01-01:bar⟧\n└─ BL-01-02 ⟦BL-01-02:bar⟧\n"), 0o644))
+
+	ts := &venom.TestSuite{Name: "BL-01 accounts", ShortName: "accounts", Filepath: filepath.Join(root, "scenarios", "suite.yml")}
+	ts.TestCases = []venom.TestCase{
+		{TestCaseInput: venom.TestCaseInput{Name: "BL-01-01 create"}, Status: venom.StatusPass,
+			TestStepResults: []venom.TestStepResult{call(venom.StatusPass, 201, "", "")}},
+		{TestCaseInput: venom.TestCaseInput{Name: "BL-01-02 read"}, Status: venom.StatusFail,
+			TestStepResults: []venom.TestStepResult{call(venom.StatusFail, 500, "", "")}},
+	}
+
+	run := filepath.Join(set, "runs", "2026-11", "18-1")
+	w := New(run)
+	ctx := context.Background()
+	w.Plan(&venom.Tests{TestSuites: []venom.TestSuite{*ts}})
+	w.Testcase(ctx, ts, &ts.TestCases[0])
+
+	body, err := os.ReadFile(filepath.Join(run, SchemesDir, "SYSTEM.md"))
+	require.NoError(t, err)
+	assert.Equal(t, "billing [██████████░░░░░░░░░░] 50 %  ⏸ 1/2\n"+
+		"├─ BL-01-01 [████████████████████] 100 %  ✅ 201\n"+
+		"└─ BL-01-02 [░░░░░░░░░░░░░░░░░░░░] 0 %  ⏸ pending\n", string(body))
+
+	w.Testcase(ctx, ts, &ts.TestCases[1])
+	require.NoError(t, w.Finish(ctx, &venom.Tests{}))
+
+	body, err = os.ReadFile(filepath.Join(run, SchemesDir, "SYSTEM.md"))
+	require.NoError(t, err)
+	assert.Contains(t, string(body), "billing [██████████░░░░░░░░░░] 50 %  ❌ 1/2\n")
+	assert.Contains(t, string(body), "└─ BL-01-02 [░░░░░░░░░░░░░░░░░░░░] 0 %  ❌ 500\n")
+}
+
 // A call of a user executor names Tempo by tempo, not tempo_url, and its trace_save was given no traces folder: the
 // span tree is fetched before the verdict and lies in the protocol and protocols/traces (run 17-7, SB-01-01).
 func TestTraceFetchedByTempoOfUserExecutor(t *testing.T) {
