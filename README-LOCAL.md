@@ -703,9 +703,13 @@ the run removes every empty folder left under `<run>`.
   sent, the answer and the trace (runs 17-1…17-3 lost them, `keepUserExecutorCall`). The output of an executor that
   passed is laid over it, its keys win.
 
-Scheme templates of a case set, when one still has them: the first `schemes/` folder met going up from a testsuite
-file, else `<run>/../../../schemes` (a run folder `<set>/runs/<YYYY-MM>/<DD-n>` next to `<set>/schemes`), is copied to
-`<run>/schemes/` file by file with only its anchors replaced. `<case>` is a testcase name, or the row id its name or the
+The scheme of a suite is drawn by hand at intake in QA: `<qa>/schemes/<suite>/` (cgw-qa `schemes/supabase/`,
+`schemes/billing/`, `schemes/crawler/`). For a run folder `<qa>/cases/<suite>/runs/<YYYY-MM>/<DD-n>`, venom takes it
+as the only scheme folder and writes two copies: once per run, the scheme as drawn, byte for byte, into
+`<qa>/cases/<suite>/schemes/` next to the runs; after every testcase and at the end, the scheme with every anchor and
+progress bar filled into `<run>/schemes/` (`schemes/supabase/1-system.md` → `cases/supabase/schemes/1-system.md`
+and `<run>/schemes/1-system.md`). Without a QA scheme, `<set>/schemes/` next to the runs is taken, else the first
+`schemes/` folder met going up from a testsuite file. `<case>` is a testcase name, or the row id its name or the
 name of its testsuite starts with, followed by a space, `-`, `_`, `:`, `·` or `.` (`SB-01-02`); of several testcases of
 one case the first failed one counts. `<hop>` is the key of a step info line `hop: <key>` (`hop: seed-<key>` for a seed
 step).
@@ -727,7 +731,7 @@ progress bars filled, after every testcase and when the run ends. A set with no 
 from the run above. A case the run does not have gives ⏸ (`not run` for a reason, `—` for a link); its bar counts it
 failed. Point tests:
 `runartifacts/writer_test.go` (`TestRunFolder`, `TestSchemesOfTheCaseSet`), `runartifacts/outcomes_test.go`
-(`TestSchemeBarsAfterEveryTestcase` in writer_test.go; `TestKilledRunLeavesInterrupted`, `TestAbortedRunNamesEveryTestcase`, `TestSetupFailureWritesTheRunFolder`,
+(`TestSchemeBarsAfterEveryTestcase` and `TestSchemeFromQA` in writer_test.go; `TestKilledRunLeavesInterrupted`, `TestAbortedRunNamesEveryTestcase`, `TestSetupFailureWritesTheRunFolder`,
 `TestSchemesDrawnFromTheRun`, `TestNoEmptyFolders`), `runartifacts/run_test.go` (`TestRunOfEveryOutcome`: a whole run
 of pass, Should, Must and skip), `TestUserExecutorCallKeptOnFailure`, `TestProtocolDBReadsInPlaceOfTrace`.
 
