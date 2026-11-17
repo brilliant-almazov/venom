@@ -11,7 +11,8 @@ import (
 	"github.com/ovh/venom"
 )
 
-// rowOf is the row of testcase index of ts, made on first sight.
+// rowOf is the row of testcase index of ts, made on first sight; its protocol is named failed until the testcase ends
+// with an outcome of its own, so a testcase interrupted, not run or pending carries the outcome too.
 func (w *Writer) rowOf(ts *venom.TestSuite, index int) *row {
 	key := fmt.Sprintf("%s\x00%d", ts.Filepath, index)
 	if r, ok := w.rows[key]; ok {
@@ -30,7 +31,7 @@ func (w *Writer) rowOf(ts *venom.TestSuite, index int) *row {
 
 	r := &row{suite: ts.Name, suiteShort: ts.ShortName, suiteFile: ts.Filepath, absFile: abs, testcase: name,
 		index: index, trees: map[string]string{}, state: statePending,
-		protocol: filepath.Join(w.dir, ProtocolsDir, slug.Make(ts.ShortName), venom.ProtocolFileName(name)+".md")}
+		protocol: filepath.Join(w.dir, ProtocolsDir, slug.Make(ts.ShortName), venom.ProtocolOutcomeName(name, venom.ProtocolOutcomeFailed)+".md")}
 	w.rows[key] = r
 
 	return r

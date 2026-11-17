@@ -117,8 +117,8 @@ hashids and the operation_id of a write, keyed on the trace of the call just bef
 `--protocol-dir <dir>` (env `VENOM_PROTOCOL_DIR`, `.venomrc` key `protocol_dir`) writes `<dir>/<testsuite>/<testcase>--<outcome>.md`
 for every testcase, whatever its outcome: passed, failed on a `Should…` assertion, failed on a `Must…` assertion, or
 skipped by `--stop-on-failure`. The outcome in the file name is `ok` for a passed testcase, `partial` for a failed one
-where some of its assertions held, `failed` for a failed one where none held; a skipped testcase has no outcome in the
-name, `<testcase>.md` (`protocol_outcome.go`). Sections:
+where some of its assertions held, `failed` for a failed one where none held; every protocol carries one of the three,
+a skipped testcase too: `partial` when some of its assertions held, `failed` otherwise (`protocol_outcome.go`). Sections:
 
 - `## Expected behaviour`: the `happens`, `expect`, `right` and `norm` info lines;
 - `## What is wrong`: the `wrong` info lines;
@@ -604,7 +604,7 @@ or drawing by hand (package `runartifacts`):
 
 | Path | What |
 | -- | -- |
-| `<run>/protocols/<testsuite>/<row id>-<outcome>-<rest>.md` | the protocol of section 10 for every testcase, whatever its outcome, named by the testcase name as written with its outcome `ok`, `partial` or `failed` of section 10 between the row id and the rest of the name (`SB-01-01-ok-POST-webhook-….md`; first, `ok-<name>.md`, for a name with no row id; `ProtocolOutcomeFile`), with a `## Links` section after its file line; a testcase skipped, interrupted, not run or pending has no outcome in the name, `<testcase>.md`; the protocol written as the testcase began is renamed when it ends, one file per testcase, and INDEX.md, the schemes, REPORT.md and PROBLEMS.md link the new name |
+| `<run>/protocols/<testsuite>/<row id>-<outcome>-<rest>.md` | the protocol of section 10 for every testcase, whatever its outcome, named by the testcase name as written with its outcome `ok`, `partial` or `failed` of section 10 between the row id and the rest of the name (`SB-01-01-ok-POST-webhook-….md`; first, `ok-<name>.md`, for a name with no row id; `ProtocolOutcomeFile`), with a `## Links` section after its file line; every protocol carries one of the three: a testcase skipped is `failed`, or `partial` when some of its assertions held, and a testcase interrupted, not run or pending is `failed` (`ProtocolOutcomeName` with `ProtocolOutcomeFailed`); the protocol written as the testcase began is renamed when it ends, one file per testcase, and INDEX.md, the schemes, REPORT.md and PROBLEMS.md link the new name |
 | `<run>/protocols/traces/<trace_id>.md` | the span tree of every traced call of the run (section 13), secrets hidden |
 | `<run>/protocols/INDEX.md` | one row per testcase in testsuite file order: `suite`, `testcase`, `verdict` (✅/❌/⏸ and the answer code, or `⏸ interrupted`, `⏸ not run`, `⏸ pending`), `trace` (a link to the tree, `trace not saved <trace_id>`, or `—` for a call with no trace), `link` to the protocol, `scenario` (`<file>:<line>`), `scheme` of the case |
 | `<run>/schemes/SYSTEM.md` | the scheme of the system: every path, every case of it and every transition of the case, drawn from the run; the paths; the checked cases |
