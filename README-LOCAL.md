@@ -709,7 +709,17 @@ as the only scheme folder and writes two copies: once per run, the scheme as dra
 `<qa>/cases/<suite>/schemes/` next to the runs; after every testcase and at the end, the scheme with every anchor and
 progress bar filled into `<run>/schemes/` (`schemes/supabase/1-system.md` → `cases/supabase/schemes/1-system.md`
 and `<run>/schemes/1-system.md`). Without a QA scheme, `<set>/schemes/` next to the runs is taken, else the first
-`schemes/` folder met going up from a testsuite file. `<case>` is a testcase name, or the row id its name or the
+`schemes/` folder met going up from a testsuite file.
+
+The scheme next to the runs, `<set>/schemes/` for a run folder `<set>/runs/<YYYY-MM>/<DD-n>`
+(`cases/supabase/schemes/`), is the live one: after every testcase of the running run and at the end, venom writes the
+value of each anchor right after it, `⟦<anchor>⟧⟪<value>⟫` (`gateway ⟦SB-01 SB-02:bar⟧⟪[██████████░░░░░░░░░░] 50 %  ❌
+1/2⟫`), so every node and case shows its ok / not ok as the run goes. The anchors stay in the file: the next run
+replaces each `⟪…⟫` with its own value. The run folder keeps the final copy in `<run>/schemes/` with the values alone.
+A scheme found up from the testsuite files is not written. Point test: `TestLiveSchemeNextToRuns` in
+`runartifacts/writer_test.go`.
+
+`<case>` is a testcase name, or the row id its name or the
 name of its testsuite starts with, followed by a space, `-`, `_`, `:`, `·` or `.` (`SB-01-02`); of several testcases of
 one case the first failed one counts. `<hop>` is the key of a step info line `hop: <key>` (`hop: seed-<key>` for a seed
 step).

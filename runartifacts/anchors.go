@@ -10,8 +10,12 @@ import (
 )
 
 // anchor is a mark of a scheme template: ⟦<case>⟧, ⟦<case>:<hop>⟧, ⟦<case>:<hop>:reason⟧, ⟦*:<hop>⟧,
-// ⟦<case>:protocol⟧, ⟦<case>:trace⟧.
-var anchor = regexp.MustCompile(`⟦([^⟦⟧]+)⟧`)
+// ⟦<case>:protocol⟧, ⟦<case>:trace⟧; in the live scheme next to the runs it is followed by the value of the last
+// fill, ⟦<case>:bar⟧⟪[████] 100 %  ✅ 200⟫, which the next fill replaces.
+var anchor = regexp.MustCompile(`⟦([^⟦⟧]+)⟧(?:⟪[^⟪⟫]*⟫)?`)
+
+// liveValue drops the brackets of a live value from the value itself, so the next fill finds where it ends.
+var liveValue = strings.NewReplacer("⟪", "", "⟫", "")
 
 // The words of the anchor grammar and of the filled text.
 const (
@@ -25,15 +29,24 @@ const (
 	caseIDBound = " -_:·."
 )
 
-// fill replaces the anchors of one scheme file written to the folder from.
+// fill replaces the anchors of one scheme file written to the folder from; live keeps every anchor with its value
+// after it, ⟦<anchor>⟧⟪<value>⟫, so the file stays fillable by the next run.
 type fill struct {
 	rows []row
 	from string
+	live bool
 }
 
 func (f fill) text(s string) string {
 	return anchor.ReplaceAllStringFunc(s, func(a string) string {
-		return f.value(strings.Split(anchor.FindStringSubmatch(a)[1], ":"))
+		key := anchor.FindStringSubmatch(a)[1]
+		v := f.value(strings.Split(key, ":"))
+
+		if !f.live {
+			return v
+		}
+
+		return "⟦" + key + "⟧⟪" + liveValue.Replace(v) + "⟫"
 	})
 }
 
