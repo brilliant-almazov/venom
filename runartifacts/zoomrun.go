@@ -11,12 +11,14 @@ func (l layout) zoomRunText(past []pastRun) string {
 	base := l.zoomDir()
 	c := countOf(l.rows)
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Run %s\n\n", l.thisRun())
-	fmt.Fprintf(&b, "- testcases: %s\n- zoom: %s · %s\n- run: %s · %s · %s\n\n", c, link(IndexFile, base, l.zoomIndex()),
-		link(ZoomSystemFile, base, l.zoomSystem()), link(ReportFile, base, l.report()), link(ProblemsFile, base, l.problems()),
-		link(IndexFile, base, l.index()))
+	fmt.Fprintf(&b, "# %s\n\n", upper(l.title()))
+	fmt.Fprintf(&b, "- testcases: %s\n- zoom: %s · %s · %s · %s\n", c, link(IndexFile, base, l.zoomIndex()),
+		link(ZoomSystemFile, base, l.zoomSystem()), link(ZoomPathsDir+"/", base, l.zoomLevel(ZoomPathsDir)),
+		link(ZoomSuitesDir+"/", base, l.zoomLevel(ZoomSuitesDir)))
+	l.runLinks(&b, base)
+	b.WriteString("\n")
 
-	lines := []string{"run " + l.thisRun() + "  " + bar(c)}
+	lines := []string{l.title() + "  " + bar(c)}
 
 	for i, folder := range l.order {
 		branch, indent := branchMid, indentMid
@@ -41,7 +43,7 @@ func (l layout) zoomRunText(past []pastRun) string {
 
 	fence(&b, lines)
 	b.WriteString("## History\n\n")
-	drawSeries(&b, seriesOf(past, pickTotal, l.thisRun(), c))
+	drawSeries(&b, l.series(past, pickTotal, c))
 	b.WriteString("## Paths\n\n| path | verdict | bar | zoom |\n| -- | -- | -- | -- |\n")
 
 	for _, folder := range l.order {

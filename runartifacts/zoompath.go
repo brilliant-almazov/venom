@@ -15,9 +15,14 @@ func (l layout) zoomPathText(folder string, past []pastRun, hist []map[string]co
 	c := countOf(rows)
 	var b strings.Builder
 	fmt.Fprintf(&b, "# Path %s\n\n", name)
-	fmt.Fprintf(&b, "- folder: `%s`\n- testcases: %s\n- zoom: %s · %s · %s\n- scheme: %s\n\n", folder, c,
-		link(ZoomRunFile, base, l.zoomRun()), link(ZoomSystemFile, base, l.zoomSystem()), link(IndexFile, base, l.zoomIndex()),
-		link(PathFile, base, l.pathScheme(name)))
+	fmt.Fprintf(&b, "- folder: `%s`\n- testcases: %s\n- zoom: %s · %s · %s\n", folder, c,
+		link(ZoomRunFile, base, l.zoomRun()), link(ZoomSystemFile, base, l.zoomSystem()), link(IndexFile, base, l.zoomIndex()))
+
+	if !l.plan {
+		fmt.Fprintf(&b, "- scheme: %s\n", link(PathFile, base, l.pathScheme(name)))
+	}
+
+	b.WriteString("\n")
 
 	lines := []string{"path " + name + "  " + bar(c)}
 	suites := suitesOf(rows)
@@ -34,7 +39,7 @@ func (l layout) zoomPathText(folder string, past []pastRun, hist []map[string]co
 
 	fence(&b, lines)
 	b.WriteString("## History\n\n")
-	drawSeries(&b, seriesOf(past, pickPath(name), l.thisRun(), c))
+	drawSeries(&b, l.series(past, pickPath(name), c))
 	drawProcesses(&b, headProcesses, rows, hist)
 
 	for _, s := range suites {
@@ -55,7 +60,7 @@ func (l layout) zoomPathText(folder string, past []pastRun, hist []map[string]co
 		}
 
 		fence(&b, lines)
-		drawSeries(&b, seriesOf(past, pickSuite(s[0].suite), l.thisRun(), sc))
+		drawSeries(&b, l.series(past, pickSuite(s[0].suite), sc))
 	}
 
 	return b.String()

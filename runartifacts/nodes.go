@@ -31,11 +31,15 @@ type edge struct {
 var sqlTable = regexp.MustCompile(`(?i)\b(?:from|join|into|update|truncate(?:\s+table)?)\s+((?:"[^"]+"|[a-z_][\w$]*)(?:\.(?:"[^"]+"|[a-z_][\w$]*))?)`)
 
 // placeOf is the node of a step and the places on it: the host and the method with the path of an http call, the
-// host and the rpc of a grpc call, the database and the tables of an sql step, else the executor and the request.
+// host and the rpc of a grpc call, the database and the tables of an sql step, the broker and the exchange, routing key
+// and queue of a rabbitmq or amqp step, else the executor and the request.
 func placeOf(s venom.StepView) (string, []string) {
 	switch {
 	case s.Database != "":
 		return "sql " + s.Database, tablesOf(s.SQL)
+
+	case len(s.Queue) > 0:
+		return strings.TrimSpace(orNone(s.Type) + " " + s.URL), s.Queue
 
 	case strings.Contains(s.URL, "://"):
 		u, err := url.Parse(s.URL)
@@ -51,6 +55,26 @@ func placeOf(s venom.StepView) (string, []string) {
 	default:
 		return orNone(s.Type), []string{s.Request}
 	}
+}
+
+// leavesOf are the steps as the system sees them: a step of a user executor stands for the steps it calls, each with
+// the mark of the step, down to the steps that call no user executor (Calls, filled only in a scheme with no run).
+func leavesOf(steps []venom.StepView) []venom.StepView {
+	var leaves []venom.StepView
+
+	for _, s := range steps {
+		if len(s.Calls) == 0 {
+			leaves = append(leaves, s)
+			continue
+		}
+
+		for _, c := range leavesOf(s.Calls) {
+			c.Mark = s.Mark
+			leaves = append(leaves, c)
+		}
+	}
+
+	return leaves
 }
 
 // tablesOf are the tables of the SQL texts in the order met, «sql» when none is named; a name right before «(» is a
@@ -79,9 +103,13 @@ func tablesOf(texts []string) []string {
 	return tables
 }
 
-// add counts the step mark on c.
+// add counts the step mark on c; a step of a scheme with no run that no earlier run has carries no mark.
 func (c *count) add(mark string) {
 	c.all++
+
+	if mark == "" {
+		c.unrun++
+	}
 
 	switch mark {
 	case venom.MarkPassed:

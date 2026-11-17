@@ -196,7 +196,11 @@ func (v *Venom) readFiles(ctx context.Context, filesPath []string) (err error) {
 			}
 		}
 
-		content, err := interpolate.Do(string(btes), vars)
+		// as written, a bare {{…}} value is quoted, so the file parses with no var filled
+		content := string(quoteTemplateExpressions(btes))
+		if !v.AsWritten {
+			content, err = interpolate.Do(string(btes), vars)
+		}
 		if err != nil {
 			return err
 		}

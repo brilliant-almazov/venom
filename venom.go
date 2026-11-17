@@ -82,6 +82,8 @@ type Venom struct {
 	Artifacts RunArtifacts
 	// DryRun loads and checks the testsuites with no step run (dryrun.go).
 	DryRun bool
+	// AsWritten reads the testsuites with no var filled, each {{.x}} kept as the scenario writes it (plan.go).
+	AsWritten bool
 }
 
 var trace = color.New(color.Attribute(90)).SprintFunc()

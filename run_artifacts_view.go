@@ -174,15 +174,20 @@ func protocolStepNumber(r *TestStepResult, index int) int {
 
 // plannedStep is step i of the scenario as written, not run.
 func plannedStep(tc *TestCase, i int) StepView {
+	return plannedStepOf(tc.RawTestSteps[i], i+1, stepLine(tc, i+1))
+}
+
+// plannedStepOf is the step raw as written, numbered number at line, not run.
+func plannedStepOf(raw json.RawMessage, number, line int) StepView {
 	m := map[string]interface{}{}
-	_ = json.Unmarshal(tc.RawTestSteps[i], &m)
+	_ = json.Unmarshal(raw, &m)
 	words := []string{protocolField(m["type"])}
 	for _, k := range []string{"method", "url", "path", "service", "action"} {
 		if v := protocolField(m[k]); v != "" {
 			words = append(words, v)
 		}
 	}
-	return StepView{Number: i + 1, Line: stepLine(tc, i+1), Name: protocolField(m["name"]), Type: protocolField(m["type"]),
+	return StepView{Number: number, Line: line, Name: protocolField(m["name"]), Type: protocolField(m["type"]),
 		Request: strings.TrimSpace(strings.Join(words, " ")), Mark: MarkNotRun, Reason: ReasonStepNotReached,
 		StepFacts: stepFactsOf(m, nil)}
 }

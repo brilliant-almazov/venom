@@ -47,7 +47,7 @@ testcases:
   steps:
   - type: code
     code: 200
-    trace: `+traceOK+`
+    trace: ` + traceOK + `
     trace_dir: %s
     assertions:
     - result.statuscode ShouldEqual 200
@@ -111,9 +111,9 @@ func TestRunOfEveryOutcome(t *testing.T) {
 	dir := filepath.Join(run, ProtocolsDir, "SB-02-01-partial-outcomes")
 
 	for name, want := range map[string]string{
-		"SB-02-01-01-ok-green":      "✅ passed",
-		"SB-02-01-02-failed-should": "❌ failed",
-		"SB-02-01-03-failed-must":   "❌ failed",
+		"SB-02-01-01-ok-green":       "✅ passed",
+		"SB-02-01-02-failed-should":  "❌ failed",
+		"SB-02-01-03-failed-must":    "❌ failed",
 		"SB-02-01-04-failed-skipped": "⏭ skipped",
 		"SB-02-01-05-partial-half":   "❌ failed",
 	} {

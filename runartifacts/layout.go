@@ -19,6 +19,8 @@ type layout struct {
 	// services are the fixes of the run by service to fix (planFixes), fileOf the fix file of a row that did not pass.
 	services []fixService
 	fileOf   map[string]string
+	// plan: no run made the folder, only the zoom set is in it (WritePlan).
+	plan bool
 }
 
 // layout is the run folder of the rows as they stand.
@@ -30,7 +32,7 @@ func (w *Writer) layout() layout {
 	}
 
 	sortRows(rows)
-	l := layout{dir: w.dir, rows: rows, names: map[string]string{}}
+	l := layout{dir: w.dir, rows: rows, names: map[string]string{}, plan: w.plan}
 	bases := map[string][]string{}
 
 	for _, r := range rows {

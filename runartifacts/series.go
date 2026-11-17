@@ -12,8 +12,9 @@ type point struct {
 	c    count
 }
 
-// seriesOf is the series of one slice across the runs: every earlier run that has it, then this run.
-func seriesOf(past []pastRun, pick func(pastRun) (count, bool), name string, now count) []point {
+// series is the series of one slice across the runs: every earlier run that has it, then this run; a scheme with no
+// run has the earlier runs only.
+func (l layout) series(past []pastRun, pick func(pastRun) (count, bool), now count) []point {
 	var points []point
 
 	for _, p := range past {
@@ -22,12 +23,21 @@ func seriesOf(past []pastRun, pick func(pastRun) (count, bool), name string, now
 		}
 	}
 
-	return append(points, point{name: name + " (this run)", c: now})
+	if l.plan {
+		return points
+	}
+
+	return append(points, point{name: l.thisRun() + " (this run)", c: now})
 }
 
 // drawSeries is the history of a series in a plain code block: per run its bar, Δ p.p. and Δ abs. of ok against
 // the run before.
 func drawSeries(b *strings.Builder, points []point) {
+	if len(points) == 0 {
+		b.WriteString(barNoRun + "\n\n")
+		return
+	}
+
 	nameW, barW := len([]rune("run")), 0
 	bars := make([]string, len(points))
 

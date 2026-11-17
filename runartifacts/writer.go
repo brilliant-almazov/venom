@@ -33,6 +33,8 @@ const (
 	statePending     = "pending"
 	stateInterrupted = "interrupted"
 	stateNotRun      = "not run"
+	// stateNoRun is a testcase of a scheme drawn with no run that no earlier run of the set has (WritePlan).
+	stateNoRun = "no run"
 )
 
 // The reasons of a testcase that did not end.
@@ -56,7 +58,9 @@ type Writer struct {
 	runErr string
 	closed bool
 	// past are the earlier runs of the set the zoom set draws the history of, read once (history).
-	past   *archive
+	past *archive
+	// plan: the zoom set is drawn with no run, every bar from the last earlier run of each testcase (WritePlan).
+	plan bool
 }
 
 // row is one testcase of the run as the protocols, the index, the schemes and the report read it.

@@ -10,10 +10,11 @@ import (
 )
 
 // count is how many testcases passed, failed and did not pass or fail (skipped, interrupted, not run, pending), and
-// how many protocols are ok, partial and failed.
+// how many protocols are ok, partial and failed; unrun are those of a scheme with no run that no earlier run has.
 type count struct {
 	all, passed, failed, other int
 	ok, partial, notOK         int
+	unrun                      int
 }
 
 func countOf(rows []row) count {
@@ -29,6 +30,10 @@ func countOf(rows []row) count {
 
 		default:
 			c.notOK++
+		}
+
+		if r.state == stateNoRun {
+			c.unrun++
 		}
 
 		switch {
