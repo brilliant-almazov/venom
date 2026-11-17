@@ -160,13 +160,13 @@ func TestSchemeBarsAfterEveryTestcase(t *testing.T) {
 	assert.Contains(t, string(body), "└─ BL-01-02 [░░░░░░░░░░░░░░░░░░░░] 0 %  ❌ 500\n")
 }
 
-// The scheme of the suite drawn at intake lives in QA, <qa>/schemes/<suite>, and wins over a schemes folder of the
-// scenario set: its filled copy, bars and all, is in <run>/schemes/ after every testcase.
+// The scheme of the suite drawn at intake lives in QA next to the runs, cases/<suite>/schemes, and wins over a schemes
+// folder of the scenario set: its filled copy, bars and all, is in <run>/schemes/ after every testcase.
 func TestSchemeFromQA(t *testing.T) {
 	root := t.TempDir()
 	qa := filepath.Join(root, "cgw-qa")
-	require.NoError(t, os.MkdirAll(filepath.Join(qa, SchemesDir, "supabase"), 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(qa, SchemesDir, "supabase", "1-system.md"),
+	require.NoError(t, os.MkdirAll(filepath.Join(qa, "cases", "supabase", SchemesDir), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(qa, "cases", "supabase", SchemesDir, "1-system.md"),
 		[]byte("gateway ⟦SB-01-01:bar⟧\n"), 0o644))
 	scenarios := filepath.Join(root, "cgw-qa-scenarios", "scenarios", "supabase")
 	require.NoError(t, os.MkdirAll(filepath.Join(scenarios, SchemesDir), 0o755))

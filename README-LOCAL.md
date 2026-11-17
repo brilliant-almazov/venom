@@ -703,12 +703,11 @@ the run removes every empty folder left under `<run>`.
   sent, the answer and the trace (runs 17-1…17-3 lost them, `keepUserExecutorCall`). The output of an executor that
   passed is laid over it, its keys win.
 
-The scheme of a suite drawn at intake lives in QA: `<qa>/schemes/<suite>/` (cgw-qa `schemes/supabase/`,
-`schemes/billing/`, `schemes/crawler/`) for a run folder `<qa>/cases/<suite>/runs/<YYYY-MM>/<DD-n>`. When it is
-there, it is the only scheme taken: it is copied to `<run>/schemes/` file by file
-(`schemes/supabase/1-system.md` → `<run>/schemes/1-system.md`), with only its anchors replaced. Without it, the
-first `schemes/` folder met going up from a testsuite file is taken, else `<run>/../../../schemes` (a run folder
-`<set>/runs/<YYYY-MM>/<DD-n>` next to `<set>/schemes`). `<case>` is a testcase name, or the row id its name or the
+The scheme of a suite drawn at intake lives in QA next to its runs: `<set>/schemes/` for a run folder
+`<set>/runs/<YYYY-MM>/<DD-n>` (cgw-qa `cases/supabase/schemes/`, `cases/billing/schemes/`,
+`cases/crawler/schemes/`). When it is there, it is the only scheme taken: it is copied to `<run>/schemes/` file by
+file (`cases/supabase/schemes/1-system.md` → `<run>/schemes/1-system.md`), with only its anchors replaced. Without
+it, the first `schemes/` folder met going up from a testsuite file is taken. `<case>` is a testcase name, or the row id its name or the
 name of its testsuite starts with, followed by a space, `-`, `_`, `:`, `·` or `.` (`SB-01-02`); of several testcases of
 one case the first failed one counts. `<hop>` is the key of a step info line `hop: <key>` (`hop: seed-<key>` for a seed
 step).
