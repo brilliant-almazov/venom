@@ -209,14 +209,12 @@ func Save(ctx context.Context, tempoURL, dir, id string, wait time.Duration) (st
 	if tempoURL == "" || dir == "" {
 		return "no", "", 0
 	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "no", "", 0
-	}
+	// the folder is made with the first file, so a trace Tempo never gives leaves no empty folder
 	file := filepath.Join(dir, id+".json")
 	deadline := time.Now().Add(wait)
 	for {
 		if body, ok := fetch(ctx, tempoURL, id); ok {
-			if err := write(file, body); err == nil {
+			if err := mkdirWrite(file, body); err == nil {
 				return "yes", file, spanCount(body)
 			}
 		}
@@ -230,7 +228,7 @@ func Save(ctx context.Context, tempoURL, dir, id string, wait time.Duration) (st
 		for time.Now().Before(end) {
 			time.Sleep(2 * time.Second)
 			if body, ok := fetch(context.Background(), tempoURL, id); ok {
-				_ = write(file, body)
+				_ = mkdirWrite(file, body)
 				return
 			}
 		}

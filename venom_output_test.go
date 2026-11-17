@@ -52,11 +52,11 @@ method: GET
 
 	cleaned := v.CleanUpSecrets(ts)
 
-	assert.Equal(t, "__hidden__", cleaned.Vars["basic_auth_password"])
+	assert.Equal(t, SecretMark, cleaned.Vars["basic_auth_password"])
 	assert.Equal(t, "testuser", cleaned.Vars["basic_auth_user"])
 
 	result := cleaned.TestCases[0].TestStepResults[0]
-	assert.Equal(t, "__hidden__", result.InputVars["basic_auth_password"])
+	assert.Equal(t, SecretMark, result.InputVars["basic_auth_password"])
 	assert.NotContains(t, string(result.Raw.([]byte)), "my_secret")
 	assert.NotContains(t, string(result.Interpolated.([]byte)), "my_secret")
 	assert.NotContains(t, result.Systemout, "my_secret")
@@ -71,12 +71,12 @@ func TestHideSensitiveBytes(t *testing.T) {
 	ctx := context.WithValue(context.Background(), ContextKey("secrets"), []string{"my_secret"})
 
 	redacted := hideSensitiveBytes(ctx, []byte("basic_auth_password: my_secret\n"))
-	assert.Equal(t, "basic_auth_password: __hidden__\n", string(redacted))
+	assert.Equal(t, "basic_auth_password: "+SecretMark+"\n", string(redacted))
 }
 
 func TestReplaceSecretsLongestFirst(t *testing.T) {
 	secrets := []string{"foo", "foobar"}
-	assert.Equal(t, "__hidden__", replaceSecrets("foobar", secrets))
+	assert.Equal(t, SecretMark, replaceSecrets("foobar", secrets))
 }
 
 func TestAppendDerivedSecretsBasicAuth(t *testing.T) {
@@ -100,7 +100,7 @@ func TestAppendDerivedSecretsBasicAuth(t *testing.T) {
 		}
 	}
 	assert.True(t, found, "basic auth token should be registered as a derived secret")
-	assert.Equal(t, "__hidden__", HideSensitive(ctx, token))
+	assert.Equal(t, SecretMark, HideSensitive(ctx, token))
 }
 
 func TestAppendDerivedSecretsFromTestCaseVars(t *testing.T) {
@@ -122,8 +122,8 @@ func TestAppendDerivedSecretsFromTestCaseVars(t *testing.T) {
 	ctx := v.processSecrets(context.Background(), &ts, &ts.TestCases[0])
 
 	token := base64.StdEncoding.EncodeToString([]byte("testuser:my_secret"))
-	assert.Equal(t, "__hidden__", HideSensitive(ctx, token))
-	assert.Equal(t, "__hidden__", HideSensitive(ctx, base64.StdEncoding.EncodeToString([]byte("my_secret"))))
+	assert.Equal(t, SecretMark, HideSensitive(ctx, token))
+	assert.Equal(t, SecretMark, HideSensitive(ctx, base64.StdEncoding.EncodeToString([]byte("my_secret"))))
 	assert.NotContains(t, HideSensitive(ctx, "Authorization: Basic "+token), token)
 }
 
@@ -154,5 +154,5 @@ func TestProcessSecretsUsesTestSuiteVars(t *testing.T) {
 	}
 
 	ctx := v.processSecrets(context.Background(), &ts, nil)
-	assert.Equal(t, "__hidden__", HideSensitive(ctx, "secret-value"))
+	assert.Equal(t, SecretMark, HideSensitive(ctx, "secret-value"))
 }

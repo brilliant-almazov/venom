@@ -27,7 +27,6 @@ const (
 	protocolStepLine       = "- step: %d \"%s\""
 	protocolAfterStep      = "### step %d \"%s\" %s"
 	protocolMethodLine     = "- method: "
-	protocolMasked         = "*** (%d chars)"
 	protocolNoTrace        = "no trace"
 	protocolNoTree         = "- trace not saved:"
 	protocolDBReadLine     = "- db read: step %d \"%s\" %s"

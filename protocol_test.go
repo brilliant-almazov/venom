@@ -363,7 +363,7 @@ testcases:
 `, false)
 	p := readProtocol(t, dir, "gateway")
 	for _, want := range []string{protocolHeadRequest, protocolMethodLine + "POST", "- url: http://nginx-gateway/v1/billing/accounts",
-		"  - Authorization: Bearer " + fmt.Sprintf(protocolMasked, 12), "  - X-Idempotency-Key: NloBboqV", "\"tenant_id\": \"7\"",
+		"  - Authorization: Bearer " + SecretMark, "  - X-Idempotency-Key: NloBboqV", "\"tenant_id\": \"7\"",
 		protocolHeadAnswer, "- statuscode: 403", "- trace_id: 0af7651916cd43dd8448eb211c80319c", "  - X-Build: dev-1",
 		"  - X-Request-Id: r-1", "  - X-Trace-Id: 0af7651916cd43dd8448eb211c80319c", "\"code\": \"role_required\"",
 		protocolHeadTrace, "svc-a ✅ Get", protocolPassed} {

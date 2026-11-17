@@ -6,9 +6,11 @@ import (
 )
 
 // RunArtifacts lays the artifacts of a run out in a folder of its own (package runartifacts, --run-dir): it sees each
-// testcase before its trace gate, so a span tree missing from the trace folders can be fetched from Tempo, then once its
-// status is known, whatever the outcome, and the run once it ends.
+// testcase as it starts, so a run killed under it leaves the testcase marked interrupted; before its trace gate, so a
+// span tree missing from the trace folders can be fetched from Tempo; then once its status is known, whatever the
+// outcome; and the run once it ends.
 type RunArtifacts interface {
+	Start(ctx context.Context, ts *TestSuite, tc *TestCase)
 	BeforeVerdict(ctx context.Context, ts *TestSuite, tc *TestCase)
 	Testcase(ctx context.Context, ts *TestSuite, tc *TestCase)
 	Finish(ctx context.Context, tests *Tests) error
@@ -21,11 +23,15 @@ const (
 	MarkNotRun = "⏸"
 )
 
-// ProtocolView is what a run artifacts writer takes from one testcase: the protocol text and the facts of its call and
-// its hops.
+// ProtocolView is what a run artifacts writer takes from one testcase: the protocol text and the facts of its call,
+// its steps and its hops.
 type ProtocolView struct {
 	// Name is the testcase name as written, row id first.
-	Name    string
+	Name string
+	// Suite is the testsuite name, File its file as given to the run, Line the line of the testcase in it.
+	Suite   string
+	File    string
+	Line    int
 	Text    string
 	Mark    string
 	Code    string
@@ -37,6 +43,27 @@ type ProtocolView struct {
 	Reason string
 	// Hops are the steps with an info line "hop: <key>" by key.
 	Hops map[string]HopView
+	// Request is the call line of the call of the testcase, CallStep its 1-based step, 0 with no call.
+	Request  string
+	CallStep int
+	// Expected are the info lines happens, expect, right and norm as "key: value".
+	Expected []string
+	// Steps are the transitions of the testcase in file order: every step of the scenario, run or not.
+	Steps []StepView
+}
+
+// StepView is one step of a testcase, a transition of its scheme.
+type StepView struct {
+	// Number is the 1-based step of the testcase, Line its line in the testsuite file, 0 when unknown.
+	Number  int
+	Line    int
+	Name    string
+	Type    string
+	Request string
+	Mark    string
+	Code    string
+	TraceID string
+	Reason  string
 }
 
 // HopView is one hop of a testcase: the step that carries "hop: <key>".
