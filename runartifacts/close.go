@@ -2,6 +2,7 @@ package runartifacts
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/ovh/venom"
@@ -51,6 +52,10 @@ func (w *Writer) close(ctx context.Context, runErr, notStarted string) error {
 	err := w.render(ctx)
 	if err == nil {
 		err = w.fillSchemes(ctx)
+	}
+
+	if err == nil {
+		err = errors.Join(w.layout().writeZoom(ctx, w.history())...)
 	}
 
 	removeEmptyDirs(w.dir)

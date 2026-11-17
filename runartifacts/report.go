@@ -86,7 +86,7 @@ func (l layout) writeReport(w *Writer) error {
 	c := countOf(l.rows)
 	var b strings.Builder
 	b.WriteString("# Run report\n\n")
-	fmt.Fprintf(&b, "- verdict: %s\n- testcases: %s\n", c.mark(), c)
+	fmt.Fprintf(&b, "- verdict: %s · %s\n- testcases: %s\n", c.mark(), progress(c), c)
 	fmt.Fprintf(&b, "- start: %s\n- end: %s\n", w.start.UTC().Format(time.RFC3339), endOf(w))
 
 	if w.runErr != "" {
@@ -95,15 +95,17 @@ func (l layout) writeReport(w *Writer) error {
 
 	fmt.Fprintf(&b, "- links: %s · %s · %s · %s · %s\n", link(IndexFile, base, l.index()), link(ProblemsFile, base, l.problems()),
 		link(FixesDir+"/", base, l.fixesIndex()), link(SystemFile, base, l.systemScheme()), link(RawDir+"/", base, w.RawPath()))
-	b.WriteString("\n## Paths\n\n| path | folder | testcases | verdict | scheme |\n| -- | -- | -- | -- | -- |\n")
+	b.WriteString("\n## Paths\n\n| path | folder | testcases | verdict | bar | scheme |\n| -- | -- | -- | -- | -- | -- |\n")
 
 	for _, folder := range l.order {
 		name := l.names[folder]
 		pc := countOf(l.rowsOf(folder))
-		fmt.Fprintf(&b, "| %s | `%s` | %s | %s | %s |\n", cell(name), folder, pc, pc.mark(), link(name, base, l.pathScheme(name)))
+		fmt.Fprintf(&b, "| %s | `%s` | %s | %s | %s | %s |\n", cell(name), folder, pc, pc.mark(), progress(pc),
+			link(name, base, l.pathScheme(name)))
 	}
 
-	b.WriteString("\n## Testsuites\n\n| testsuite | protocols | testcases | verdict | " + wordFixer + " |\n| -- | -- | -- | -- | -- |\n")
+	b.WriteString("\n## Testsuites\n\n| testsuite | protocols | testcases | verdict | bar | " + wordFixer +
+		" |\n| -- | -- | -- | -- | -- | -- |\n")
 
 	for _, s := range suitesOf(l.rows) {
 		sc := countOf(s)
@@ -113,8 +115,8 @@ func (l layout) writeReport(w *Writer) error {
 			return err
 		}
 
-		fmt.Fprintf(&b, "| %s | %s | %s | %s | %s |\n", cell(s[0].suite), link(filepath.Base(dirOf(s[0].protocol))+"/", base,
-			dirOf(s[0].protocol)), sc, sc.mark(), fixes)
+		fmt.Fprintf(&b, "| %s | %s | %s | %s | %s | %s |\n", cell(s[0].suite), link(filepath.Base(dirOf(s[0].protocol))+"/", base,
+			dirOf(s[0].protocol)), sc, sc.mark(), progress(sc), fixes)
 	}
 
 	b.WriteString("\n## Schemes\n\n| slice | scheme | verdict | share |\n| -- | -- | -- | -- |\n")

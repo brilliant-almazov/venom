@@ -53,6 +53,7 @@ type renderSpan struct {
 	SpanID       string          `json:"spanId"`
 	ParentSpanID string          `json:"parentSpanId"`
 	Name         string          `json:"name"`
+	Kind         json.RawMessage `json:"kind"`
 	Start        json.RawMessage `json:"startTimeUnixNano"`
 	End          json.RawMessage `json:"endTimeUnixNano"`
 	Attributes   []renderAttr    `json:"attributes"`

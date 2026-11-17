@@ -68,6 +68,7 @@ type StepView struct {
 	Reason  string
 	// Body is the body the step answered, secrets hidden, empty when it answered none.
 	Body string
+	StepFacts
 }
 
 // HopView is one hop of a testcase: the step that carries "hop: <key>".

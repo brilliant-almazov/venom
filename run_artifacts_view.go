@@ -148,7 +148,7 @@ func protocolStepViews(tc *TestCase) []StepView {
 		}
 		steps = append(steps, StepView{Number: number, Line: stepLine(tc, number), Name: name,
 			Type: protocolField(m["type"]), Request: strings.Trim(protocolRequest(r), "`"), Mark: protocolMark(r.Status),
-			Code: protocolCode(r), TraceID: protocolTraceID(r), Reason: protocolStepReason(r), Body: protocolBody(r)})
+			Code: protocolCode(r), TraceID: protocolTraceID(r), Reason: protocolStepReason(r), Body: protocolBody(r), StepFacts: stepFactsOf(m, r)})
 	}
 	if tc.Status == StatusSkip && len(tc.TestStepResults) == 0 {
 		for i := range tc.RawTestSteps {
@@ -183,7 +183,8 @@ func plannedStep(tc *TestCase, i int) StepView {
 		}
 	}
 	return StepView{Number: i + 1, Line: stepLine(tc, i+1), Name: protocolField(m["name"]), Type: protocolField(m["type"]),
-		Request: strings.TrimSpace(strings.Join(words, " ")), Mark: MarkNotRun, Reason: ReasonStepNotReached}
+		Request: strings.TrimSpace(strings.Join(words, " ")), Mark: MarkNotRun, Reason: ReasonStepNotReached,
+		StepFacts: stepFactsOf(m, nil)}
 }
 
 // stepLine is the line of the 1-based step in the testsuite file, the line of the testcase when unknown.

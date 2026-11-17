@@ -47,6 +47,7 @@ func (w *Writer) Testcase(ctx context.Context, ts *venom.TestSuite, tc *venom.Te
 	view.Text = ""
 	r.view = view
 	r.fixer = fixerOf(view)
+	r.points = pointsOfView(view)
 	r.schemes = findSchemes(ts.Filepath)
 
 	if err := writeFile(r.protocol, []byte(venom.HideSensitive(ctx, withLinks(text, w.links(r))))); err != nil {

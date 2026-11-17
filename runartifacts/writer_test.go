@@ -276,5 +276,5 @@ func TestReportNamesServiceToFix(t *testing.T) {
 	assert.Regexp(t, `\| SB-03-01-01 create \|.*\| `+regexp.QuoteMeta(billingFix)+` \|`, problems)
 	assert.Regexp(t, `\| SB-03-01-02 monolith \|.*\| `+regexp.QuoteMeta(unknownFix)+` \|`, problems)
 
-	assert.Contains(t, read(ReportFile), "| ❌ 0/2 | "+billingFix+"; "+unknownFix+" |")
+	assert.Contains(t, read(ReportFile), "| ❌ 0/2 | "+emptyBar+" | "+billingFix+"; "+unknownFix+" |")
 }
