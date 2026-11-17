@@ -93,8 +93,8 @@ func (l layout) writeReport(w *Writer) error {
 		fmt.Fprintf(&b, "- run ended early: %s\n", one(w.runErr))
 	}
 
-	fmt.Fprintf(&b, "- links: %s · %s · %s · %s\n", link(IndexFile, base, l.index()), link(ProblemsFile, base, l.problems()),
-		link(SystemFile, base, l.systemScheme()), link(RawDir+"/", base, w.RawPath()))
+	fmt.Fprintf(&b, "- links: %s · %s · %s · %s · %s\n", link(IndexFile, base, l.index()), link(ProblemsFile, base, l.problems()),
+		link(FixesDir+"/", base, l.fixesIndex()), link(SystemFile, base, l.systemScheme()), link(RawDir+"/", base, w.RawPath()))
 	b.WriteString("\n## Paths\n\n| path | folder | testcases | verdict | scheme |\n| -- | -- | -- | -- | -- |\n")
 
 	for _, folder := range l.order {
@@ -107,8 +107,14 @@ func (l layout) writeReport(w *Writer) error {
 
 	for _, s := range suitesOf(l.rows) {
 		sc := countOf(s)
+
+		fixes, err := l.fixLinks(base, s)
+		if err != nil {
+			return err
+		}
+
 		fmt.Fprintf(&b, "| %s | %s | %s | %s | %s |\n", cell(s[0].suite), link(filepath.Base(dirOf(s[0].protocol))+"/", base,
-			dirOf(s[0].protocol)), sc, sc.mark(), fixersOf(s))
+			dirOf(s[0].protocol)), sc, sc.mark(), fixes)
 	}
 
 	b.WriteString("\n## Schemes\n\n| slice | scheme | verdict | share |\n| -- | -- | -- | -- |\n")
