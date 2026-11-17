@@ -38,7 +38,7 @@ func (w *Writer) rowOf(ts *venom.TestSuite, index int) *row {
 
 // suiteDir is the folder protocols/<row id>-<outcome>-<rest> of the testsuite short: ok when every testcase of it
 // ended ok, partial when some testcase is ok or partial, failed otherwise — a testcase that did not end is failed
-// («статус доавить в папку»).
+// (the outcome belongs in the folder name too).
 func (w *Writer) suiteDir(short string) string {
 	all, some, seen := true, false, false
 

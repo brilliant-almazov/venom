@@ -8,7 +8,7 @@ import (
 )
 
 // writeProblems writes PROBLEMS.md: every testcase that did not pass — failed, skipped, interrupted, not run — with its
-// first failed step, the reason, the scenario line, the protocol, the scheme and the trace.
+// first failed step, the reason, the scenario line, the protocol, the scheme, the trace and the service to fix.
 func (l layout) writeProblems(w *Writer) error {
 	base := dirOf(l.problems())
 	var b strings.Builder
@@ -18,8 +18,8 @@ func (l layout) writeProblems(w *Writer) error {
 		fmt.Fprintf(&b, "- run ended early: %s\n\n", one(w.runErr))
 	}
 
-	b.WriteString("| testcase | path | verdict | step | reason | scenario | protocol | scheme | trace |\n")
-	b.WriteString("| -- | -- | -- | -- | -- | -- | -- | -- | -- |\n")
+	b.WriteString("| testcase | path | verdict | step | reason | scenario | protocol | scheme | trace | " + wordFixer + " |\n")
+	b.WriteString("| -- | -- | -- | -- | -- | -- | -- | -- | -- | -- |\n")
 	n := 0
 
 	for _, r := range l.rows {
@@ -35,13 +35,13 @@ func (l layout) writeProblems(w *Writer) error {
 			protocol = link(protocolLink, base, r.protocol)
 		}
 
-		fmt.Fprintf(&b, "| %s | %s | %s | %s | %s | %s | %s | %s | %s |\n", cell(r.testcase), cell(l.pathOf(r)), verdictOf(r),
-			step, one(r.view.Reason), scenarioLink(base, r, line), protocol, link(wordScheme, base, l.caseScheme(r)),
-			traceCell(base, r))
+		fmt.Fprintf(&b, "| %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |\n", cell(r.testcase), cell(l.pathOf(r)),
+			verdictOf(r), step, one(r.view.Reason), scenarioLink(base, r, line), protocol, link(wordScheme, base, l.caseScheme(r)),
+			traceCell(base, r), fixerCell(r))
 	}
 
 	if n == 0 {
-		b.WriteString("| no problems | | | | | | | | |\n")
+		b.WriteString("| no problems | | | | | | | | | |\n")
 	}
 
 	return writeFile(l.problems(), []byte(b.String()))

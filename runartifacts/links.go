@@ -74,6 +74,11 @@ func (w *Writer) links(r *row) string {
 	l := w.layout()
 	from := filepath.Dir(r.protocol)
 	var b strings.Builder
+
+	if !passed(*r) {
+		fmt.Fprintf(&b, "%s: %s\n\n", wordFixer, fixerCell(*r))
+	}
+
 	b.WriteString(headLinks + "\n\n")
 	fmt.Fprintf(&b, "- scenario: %s\n", scenarioLink(from, *r, r.view.Line))
 
