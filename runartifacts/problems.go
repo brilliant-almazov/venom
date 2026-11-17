@@ -27,6 +27,11 @@ func (l layout) writeProblems(w *Writer) error {
 			continue
 		}
 
+		fix, err := l.fixLink(base, r)
+		if err != nil {
+			return err
+		}
+
 		n++
 		step, line := problemStep(r)
 		protocol := noValue
@@ -37,7 +42,7 @@ func (l layout) writeProblems(w *Writer) error {
 
 		fmt.Fprintf(&b, "| %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |\n", cell(r.testcase), cell(l.pathOf(r)),
 			verdictOf(r), step, one(r.view.Reason), scenarioLink(base, r, line), protocol, link(wordScheme, base, l.caseScheme(r)),
-			traceCell(base, r), fixerCell(r))
+			traceCell(base, r), fix)
 	}
 
 	if n == 0 {
@@ -49,13 +54,22 @@ func (l layout) writeProblems(w *Writer) error {
 
 // problemStep is the first failed step of the testcase and its line, else its first step not run, else the testcase.
 func problemStep(r row) (string, int) {
+	if s, ok := failedStep(r); ok {
+		return fmt.Sprintf("%d %s", s.Number, one(s.Name)), s.Line
+	}
+
+	return noValue, r.view.Line
+}
+
+// failedStep is the first failed step of the testcase, else its first step not run.
+func failedStep(r row) (venom.StepView, bool) {
 	for _, want := range []string{venom.MarkFailed, venom.MarkNotRun} {
 		for _, s := range r.view.Steps {
 			if s.Mark == want {
-				return fmt.Sprintf("%d %s", s.Number, one(s.Name)), s.Line
+				return s, true
 			}
 		}
 	}
 
-	return noValue, r.view.Line
+	return venom.StepView{}, false
 }

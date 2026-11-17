@@ -19,9 +19,23 @@ const (
 	noFailure  = "no span failed in trace %s"
 )
 
+// fixer is the service to fix of a testcase: the service and the span of the deepest failed span of its traces and the
+// trace it lies in, else the reason it is not established.
+type fixer struct {
+	service, span, trace, reason string
+}
+
+func (f fixer) String() string {
+	if f.service == "" {
+		return notFound + " (" + f.reason + ")"
+	}
+
+	return f.service + " · " + f.span
+}
+
 // fixerOf is the service to fix of a testcase that ended: the service and the span of the deepest failed span of its
 // traces, the call's first (tempo.Culprit), else «not established (<reason>)».
-func fixerOf(view venom.ProtocolView) string {
+func fixerOf(view venom.ProtocolView) fixer {
 	ids := []string{}
 	seen := map[string]bool{}
 
@@ -33,7 +47,7 @@ func fixerOf(view venom.ProtocolView) string {
 	}
 
 	if len(ids) == 0 {
-		return unknownFixer(noTraceID)
+		return fixer{reason: noTraceID}
 	}
 
 	reason := ""
@@ -52,13 +66,13 @@ func fixerOf(view venom.ProtocolView) string {
 		}
 
 		if service, span, ok := tempo.Culprit(body); ok {
-			return service + " · " + span
+			return fixer{service: service, span: span, trace: id}
 		}
 
 		reason = orFirst(reason, fmt.Sprintf(noFailure, id))
 	}
 
-	return unknownFixer(reason)
+	return fixer{trace: ids[0], reason: reason}
 }
 
 func stepTraces(view venom.ProtocolView) []string {
@@ -71,10 +85,6 @@ func stepTraces(view venom.ProtocolView) []string {
 	return ids
 }
 
-func unknownFixer(reason string) string {
-	return notFound + " (" + reason + ")"
-}
-
 func orFirst(first, next string) string {
 	if first != "" {
 		return first
@@ -83,39 +93,20 @@ func orFirst(first, next string) string {
 	return next
 }
 
-// fixerCell is the service to fix of the row, «—» for a testcase that passed.
-func fixerCell(r row) string {
-	switch {
-	case passed(r):
-		return noValue
-
-	case r.state != stateDone:
-		return unknownFixer(notEnded)
-
-	default:
-		return cell(r.fixer)
+// fixerOfRow is the service to fix of a row that did not pass; a testcase that did not end has none.
+func fixerOfRow(r row) fixer {
+	if r.state != stateDone {
+		return fixer{reason: notEnded}
 	}
+
+	return r.fixer
 }
 
-// fixersOf are the services to fix of the rows that did not pass, each once, «—» when every one passed.
-func fixersOf(rows []row) string {
-	var out []string
-	seen := map[string]bool{}
-
-	for _, r := range rows {
-		if passed(r) {
-			continue
-		}
-
-		if f := fixerCell(r); !seen[f] {
-			seen[f] = true
-			out = append(out, f)
-		}
-	}
-
-	if len(out) == 0 {
+// fixerCell is the service to fix of the row, «—» for a testcase that passed.
+func fixerCell(r row) string {
+	if passed(r) {
 		return noValue
 	}
 
-	return strings.Join(out, "; ")
+	return cell(fixerOfRow(r).String())
 }

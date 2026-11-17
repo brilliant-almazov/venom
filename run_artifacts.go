@@ -66,6 +66,8 @@ type StepView struct {
 	Code    string
 	TraceID string
 	Reason  string
+	// Body is the body the step answered, secrets hidden, empty when it answered none.
+	Body string
 }
 
 // HopView is one hop of a testcase: the step that carries "hop: <key>".
@@ -116,6 +118,11 @@ func TempoURL(tc *TestCase) string {
 		}
 	}
 	return ""
+}
+
+// ProtocolBodyBlock prints a body as the protocol does: verbatim in a code block, a JSON body one key per line, cut.
+func ProtocolBodyBlock(title, body string) string {
+	return protocolBodyBlock(title, body)
 }
 
 // ProtocolFileName is the file name of the protocol of a testcase named name, with no extension.

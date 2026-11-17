@@ -16,6 +16,9 @@ type layout struct {
 	rows  []row
 	names map[string]string
 	order []string
+	// services are the fixes of the run by service to fix (planFixes), fileOf the fix file of a row that did not pass.
+	services []fixService
+	fileOf   map[string]string
 }
 
 // layout is the run folder of the rows as they stand.
@@ -48,6 +51,8 @@ func (w *Writer) layout() layout {
 			l.names[folder] = pathName(base, folder, len(folders))
 		}
 	}
+
+	l.planFixes()
 
 	return l
 }
@@ -106,6 +111,10 @@ func (l layout) report() string {
 
 func (l layout) problems() string {
 	return filepath.Join(l.dir, ProblemsFile)
+}
+
+func (l layout) fixesIndex() string {
+	return filepath.Join(l.dir, FixesDir, IndexFile)
 }
 
 // written: the protocol file of the row is on disk, a pending testcase has none yet.

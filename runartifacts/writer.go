@@ -68,7 +68,7 @@ type row struct {
 	schemes string
 	state   string
 	// fixer is the service to fix of a testcase that ended and did not pass (fixerOf).
-	fixer string
+	fixer fixer
 	// outcome is ok, partial or failed of the protocol, failed until the testcase ends with one of its own.
 	outcome string
 }

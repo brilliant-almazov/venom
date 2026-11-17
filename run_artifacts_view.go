@@ -46,6 +46,9 @@ func ProtocolOf(ctx context.Context, ts *TestSuite, tc *TestCase) ProtocolView {
 		}
 	}
 	view.Steps = protocolStepViews(tc)
+	for i := range view.Steps {
+		view.Steps[i].Body = HideSensitive(ctx, view.Steps[i].Body)
+	}
 	for i := range tc.TestStepResults {
 		r := &tc.TestStepResults[i]
 		if id := protocolTraceID(r); id != "" {
@@ -145,7 +148,7 @@ func protocolStepViews(tc *TestCase) []StepView {
 		}
 		steps = append(steps, StepView{Number: number, Line: stepLine(tc, number), Name: name,
 			Type: protocolField(m["type"]), Request: strings.Trim(protocolRequest(r), "`"), Mark: protocolMark(r.Status),
-			Code: protocolCode(r), TraceID: protocolTraceID(r), Reason: protocolStepReason(r)})
+			Code: protocolCode(r), TraceID: protocolTraceID(r), Reason: protocolStepReason(r), Body: protocolBody(r)})
 	}
 	if tc.Status == StatusSkip && len(tc.TestStepResults) == 0 {
 		for i := range tc.RawTestSteps {

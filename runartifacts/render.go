@@ -7,14 +7,15 @@ import (
 	"github.com/ovh/venom"
 )
 
-// refresh redraws what one testcase is on: the index, the report, the problems, the scheme of the system, of its path
+// refresh redraws what one testcase is on: the index, the fixes, the report, the problems, the scheme of the system, of its path
 // and of the case. A run killed after it leaves them as they stand.
 func (w *Writer) refresh(ctx context.Context, r *row) {
 	l := w.layout()
 	name := l.pathOf(*r)
 
 	for _, err := range []error{
-		l.writeIndex(), l.writeReport(w), l.writeProblems(w), l.writeSystem(), l.writePath(name), l.writeCase(*r),
+		l.writeIndex(), l.writeFixes(), l.writeReport(w), l.writeProblems(w), l.writeSystem(), l.writePath(name),
+		l.writeCase(*r),
 	} {
 		if err != nil {
 			venom.Error(ctx, "unable to write the run folder %s: %v", w.dir, err)
@@ -22,10 +23,10 @@ func (w *Writer) refresh(ctx context.Context, r *row) {
 	}
 }
 
-// render redraws the whole run folder: the index, the report, the problems and every scheme.
+// render redraws the whole run folder: the index, the fixes, the report, the problems and every scheme.
 func (w *Writer) render(ctx context.Context) error {
 	l := w.layout()
-	errs := []error{l.writeIndex(), l.writeReport(w), l.writeProblems(w), l.writeSystem()}
+	errs := []error{l.writeIndex(), l.writeFixes(), l.writeReport(w), l.writeProblems(w), l.writeSystem()}
 
 	for _, folder := range l.order {
 		errs = append(errs, l.writePath(l.names[folder]))
