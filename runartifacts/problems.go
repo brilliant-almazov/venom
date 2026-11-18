@@ -7,17 +7,14 @@ import (
 	"github.com/ovh/venom"
 )
 
-// writeProblems writes PROBLEMS.md: every testcase that did not pass — failed, skipped, interrupted, not run — by
-// priority (problemsOf), with the index of its problem, its kind and criticality, its first failed step, the reason,
-// the scenario line, the protocol, the scheme, the trace and the service to fix.
-func (l layout) writeProblems(w *Writer) error {
+// writeProblems writes PROBLEMS.md: the real defects of the run on a stand set up right by priority (problemsOf) — no
+// testcase skipped, interrupted or not run, none red for the stand, no error of the run —, with the index of its
+// problem, its kind and criticality, its first failed step, the reason, the scenario line, the protocol, the scheme,
+// the trace and the service to fix.
+func (l layout) writeProblems() error {
 	base := dirOf(l.problems())
 	var b strings.Builder
 	b.WriteString("# Problems\n\n")
-
-	if w.runErr != "" {
-		fmt.Fprintf(&b, "- run ended early: %s\n\n", one(w.runErr))
-	}
 
 	b.WriteString("| problem | kind | criticality | testcase | path | verdict | step | reason | scenario | protocol | scheme | trace | " +
 		wordFixer + " |\n")

@@ -28,13 +28,15 @@ func levelOf(name string) string {
 	return name
 }
 
-// problemsOf are the testcases that did not pass by priority: by the kind of their scenario, then by their criticality,
-// each from the first to fix as venomrc.base.yaml or a .venomrc sets them, «not set» last; testcase order on a tie.
+// problemsOf are the real defects of the run by priority: the testcases that ended failed on the product — not one
+// skipped, interrupted, not run or pending, not one red for the stand set up wrong (venom.ProtocolView.Stand) —, by the
+// kind of their scenario, then by their criticality, each from the first to fix as venomrc.base.yaml or a .venomrc sets
+// them, «not set» last; testcase order on a tie.
 func problemsOf(rows []row) []row {
 	var out []row
 
 	for _, r := range rows {
-		if !passed(r) {
+		if failed(r) && r.view.Stand == "" {
 			out = append(out, r)
 		}
 	}

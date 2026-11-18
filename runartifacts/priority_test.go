@@ -35,6 +35,27 @@ func TestProblemsByPriority(t *testing.T) {
 		problemLine(rows[5]))
 }
 
+// PROBLEMS.md lists only real defects on a stand set up right: no testcase skipped, interrupted, not run or pending,
+// none red for the stand (owner 2026-11-18: «not run … И это точно не failed»; «Фейлит, потому что криво настроен
+// стенд, это не фейлит»).
+func TestProblemsOnlyRealDefects(t *testing.T) {
+	rows := []row{
+		{testcase: "SB-01 defect", state: stateDone, view: venom.ProtocolView{Mark: venom.MarkFailed}},
+		{testcase: "SB-02 skipped", state: stateDone, view: venom.ProtocolView{Mark: venom.MarkNotRun}},
+		{testcase: "SB-03 interrupted", state: stateInterrupted, view: venom.ProtocolView{Mark: venom.MarkFailed}},
+		{testcase: "SB-04 not run", state: stateNotRun, view: venom.ProtocolView{Mark: venom.MarkNotRun}},
+		{testcase: "SB-05 pending", state: statePending, view: venom.ProtocolView{Mark: venom.MarkNotRun}},
+		{testcase: "SB-06 stand", state: stateDone, view: venom.ProtocolView{Mark: venom.MarkFailed, Stand: venom.StandNoTree}},
+	}
+
+	var names []string
+	for _, r := range problemsOf(rows) {
+		names = append(names, r.testcase)
+	}
+
+	assert.Equal(t, []string{"SB-01 defect"}, names)
+}
+
 // The culprits of the traces of a testcase in two services make the zone of fix «both».
 func TestFixBoth(t *testing.T) {
 	one := bothOf([]fixer{{service: "svc-a", span: "A/x", trace: "t1"}, {service: "svc-a", span: "A/y", trace: "t2"}})

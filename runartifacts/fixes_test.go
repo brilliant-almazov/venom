@@ -126,6 +126,6 @@ func TestRedTestcaseWithoutFixFileRefused(t *testing.T) {
 
 	_, err := l.fixLink(l.dir, r)
 	require.EqualError(t, err, "testcase S-001 create did not pass and has no fix file")
-	require.Error(t, l.writeProblems(New(l.dir)))
+	require.Error(t, l.writeProblems())
 	require.Error(t, l.writeReport(New(l.dir)))
 }
