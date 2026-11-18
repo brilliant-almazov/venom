@@ -388,10 +388,10 @@ func TestReportNamesServiceToFix(t *testing.T) {
 		return string(body)
 	}
 
-	const billing = "svc-billing · billing.v1.Accounts/Create"
+	const billing = "svc-billing · billing.v1.Accounts/Create — the deepest failed span of trace " + traceOK
 	const unknown = "not established (the call returned no trace id)"
-	assert.Contains(t, read("protocols/SB-03-01-failed-accounts/SB-03-01-01-failed-create.md"), "\n\nfix in: "+billing+"\n\n## Links")
-	assert.Contains(t, read("protocols/SB-03-01-failed-accounts/SB-03-01-02-failed-monolith.md"), "\n\nfix in: "+unknown+"\n\n## Links")
+	assert.Contains(t, read("protocols/SB-03-01-failed-accounts/SB-03-01-01-failed-create.md"), "\n\nfix in: [" + billing + "](../../fixes/svc-billing/01-SB-03-01-01-create.md)\n\n## Links")
+	assert.Contains(t, read("protocols/SB-03-01-failed-accounts/SB-03-01-02-failed-monolith.md"), "\n\nfix in: [" + unknown + "](../../fixes/not-established/01-SB-03-01-02-monolith.md)\n\n## Links")
 
 	const billingFix = "[" + billing + "](fixes/svc-billing/01-SB-03-01-01-create.md)"
 	const unknownFix = "[" + unknown + "](fixes/not-established/01-SB-03-01-02-monolith.md)"

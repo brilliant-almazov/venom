@@ -8,8 +8,8 @@ import (
 )
 
 // indexHeader is the table of protocols/INDEX.md, one row per testcase.
-const indexHeader = "| suite | testcase | verdict | trace | link | scenario | scheme | path | previous |\n" +
-	"| -- | -- | -- | -- | -- | -- | -- | -- | -- |\n"
+const indexHeader = "| suite | testcase | verdict | trace | link | scenario | scheme | path | previous | " + wordFixer + " |\n" +
+	"| -- | -- | -- | -- | -- | -- | -- | -- | -- | -- |\n"
 
 // noTree is the trace cell of a call whose trace id has no span tree in Tempo.
 const noTree = "trace not saved"
@@ -32,7 +32,7 @@ func sortRows(rows []row) {
 }
 
 // writeIndex writes protocols/INDEX.md: one row per testcase with its verdict, trace, protocol, scenario line, scheme
-// and its state against the previous run.
+// its state against the previous run and its zone of fix responsibility.
 func (l layout) writeIndex() error {
 	base := filepath.Dir(l.index())
 	var b strings.Builder
@@ -58,9 +58,9 @@ func (l layout) writeIndex() error {
 		}
 
 		path := l.pathOf(r)
-		fmt.Fprintf(&b, "| %s | %s | %s | %s | %s | %s | %s | %s | %s |\n", cell(r.suite), cell(r.testcase), verdictOf(r),
+		fmt.Fprintf(&b, "| %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |\n", cell(r.suite), cell(r.testcase), verdictOf(r),
 			traceCell(base, r), protocol, scenarioLink(base, r, r.view.Line), link(wordScheme, base, l.caseScheme(r)),
-			link(cell(path), base, l.pathScheme(path)), l.dynamicsOf(r))
+			link(cell(path), base, l.pathScheme(path)), l.dynamicsOf(r), l.fixCell(base, r))
 	}
 
 	return writeFile(l.index(), []byte(b.String()))

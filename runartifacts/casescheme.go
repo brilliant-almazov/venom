@@ -24,7 +24,7 @@ func (l layout) writeCase(r row) error {
 		protocol = link(protocolLink, base, r.protocol)
 	}
 
-	fmt.Fprintf(&b, "- protocol: %s\n", protocol)
+	fmt.Fprintf(&b, "- protocol: %s\n- %s: %s\n", protocol, wordFixer, l.fixCell(base, r))
 
 	for _, id := range traceIDs(r) {
 		fmt.Fprintf(&b, "- trace id: %s\n", traceRef(base, r, id))

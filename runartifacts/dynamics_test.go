@@ -32,7 +32,7 @@ func TestDynamicsAgainstThePreviousRun(t *testing.T) {
 	w.Plan(&venom.Tests{TestSuites: []venom.TestSuite{*ts}})
 	w.Testcase(ctx, ts, &ts.TestCases[1])
 
-	assert.Contains(t, readRun(t, run, "protocols/INDEX.md"), " | failed → pending · 2026-11/17-9 |\n")
+	assert.Contains(t, readRun(t, run, "protocols/INDEX.md"), " | failed → pending · 2026-11/17-9 | [not established (the testcase did not end)](")
 
 	w.Testcase(ctx, ts, &ts.TestCases[0])
 	require.NoError(t, w.Finish(ctx, &venom.Tests{}))
@@ -47,8 +47,8 @@ func TestDynamicsAgainstThePreviousRun(t *testing.T) {
 
 	index := readRun(t, run, "protocols/INDEX.md")
 	assert.Contains(t, index, total)
-	assert.Contains(t, index, " | "+improved+" |\n")
-	assert.Contains(t, index, " | new |\n")
+	assert.Contains(t, index, " | "+improved+" | — (nothing to fix: the testcase passed) |\n")
+	assert.Contains(t, index, " | new | [not established (the call returned no trace id)](")
 
 	assert.Contains(t, readRun(t, run, "protocols/SB-03-01-partial-accounts/SB-03-01-01-ok-create.md"), "- previous: "+improved+"\n")
 	assert.Contains(t, readRun(t, run, "schemes/03-suites/SB-03-01-accounts.md"), "- previous: "+improved+"\n")
@@ -70,4 +70,36 @@ func TestDynamicsVerdict(t *testing.T) {
 	assert.Equal(t, dynSame, dynamicsVerdict(venom.ProtocolOutcomeFailed, venom.ProtocolOutcomeFailed))
 	assert.Equal(t, venom.ProtocolOutcomeNotRun, pastOutcome(caseRun{mark: venom.MarkNotRun}))
 	assert.Equal(t, venom.ProtocolOutcomePartial, pastOutcome(caseRun{mark: venom.MarkFailed, ok: 50}))
+}
+
+// Every testcase names its zone of fix responsibility in full — the service, the span and why, or why it is not
+// established, or that a passed one has nothing to fix — in REPORT.md, INDEX.md, PROBLEMS.md, its protocol, its scheme,
+// the testsuite zoom and the live scheme.
+func TestFixInEveryFile(t *testing.T) {
+	root := t.TempDir()
+	ts := suiteOfZoom(t, root)
+	run := filepath.Join(root, "run")
+	w := New(run)
+	ctx := context.Background()
+	w.Plan(&venom.Tests{TestSuites: []venom.TestSuite{*ts}})
+	w.Testcase(ctx, ts, &ts.TestCases[0])
+	w.Testcase(ctx, ts, &ts.TestCases[1])
+	require.NoError(t, w.Finish(ctx, &venom.Tests{}))
+
+	const passedFix = "— (nothing to fix: the testcase passed)"
+	const rowFix = "[not established (the call returned no trace id)]("
+
+	report := readRun(t, run, ReportFile)
+	assert.Contains(t, report, "## "+headFix+"\n\n| testcase | verdict | fix in |\n")
+	assert.Contains(t, report, "| SB-03-01-01 create | ✅ 201 | "+passedFix+" |\n")
+	assert.Contains(t, report, "| SB-03-01-02 row | ❌ | "+rowFix)
+	assert.Contains(t, readRun(t, run, "protocols/INDEX.md"), " | "+passedFix+" |\n")
+	assert.Contains(t, readRun(t, run, ProblemsFile), "| SB-03-01-02 row |")
+	assert.Contains(t, readRun(t, run, "protocols/SB-03-01-partial-accounts/SB-03-01-01-ok-create.md"), "fix in: "+passedFix+"\n\n## Links")
+	assert.Contains(t, readRun(t, run, "protocols/SB-03-01-partial-accounts/SB-03-01-02-failed-row.md"), "fix in: "+rowFix)
+	assert.Contains(t, readRun(t, run, "schemes/03-suites/SB-03-01-accounts.md"), "- fix in: "+passedFix+"\n")
+
+	l := w.layout()
+	assert.Equal(t, passedFix+" · not established (the call returned no trace id) · —",
+		fill{rows: l.rows}.text("⟦SB-03-01-01:fix⟧ · ⟦SB-03-01-02:fix⟧ · ⟦SB-09:fix⟧"))
 }

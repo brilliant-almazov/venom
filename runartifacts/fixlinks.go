@@ -13,10 +13,10 @@ func (l layout) fixLink(from string, r row) (string, error) {
 		return "", fmt.Errorf(noFixFile, r.testcase)
 	}
 
-	return link(cell(fixerOfRow(r).String()), from, file), nil
+	return link(cell(fixDetail(r)), from, file), nil
 }
 
-// fixLinks are the fixes of the rows that did not pass, each once, «—» when every one passed.
+// fixLinks are the fixes of the rows that did not pass, each fix file once, «—» when every one passed.
 func (l layout) fixLinks(from string, rows []row) (string, error) {
 	var out []string
 	seen := map[string]bool{}
@@ -31,8 +31,8 @@ func (l layout) fixLinks(from string, rows []row) (string, error) {
 			return "", err
 		}
 
-		if !seen[f] {
-			seen[f] = true
+		if file := l.fileOf[rowKey(r)]; !seen[file] {
+			seen[file] = true
 			out = append(out, f)
 		}
 	}

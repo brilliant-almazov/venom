@@ -92,7 +92,7 @@ func percent(n, all int) string {
 }
 
 // writeReport writes REPORT.md: the state of the run, its counts and their change against the previous run, every
-// path, every testcase against the previous run and every trace, with the links.
+// path, every testcase against the previous run and with its zone of fix responsibility, every trace, with the links.
 func (l layout) writeReport(w *Writer) error {
 	base := dirOf(l.report())
 	c := countOf(l.rows)
@@ -145,6 +145,12 @@ func (l layout) writeReport(w *Writer) error {
 	}
 
 	l.writeDynamics(&b)
+	b.WriteString("\n## " + headFix + "\n\n| testcase | verdict | " + wordFixer + " |\n| -- | -- | -- |\n")
+
+	for _, r := range l.rows {
+		fmt.Fprintf(&b, "| %s | %s | %s |\n", cell(r.testcase), verdictOf(r), l.fixCell(base, r))
+	}
+
 	b.WriteString("\n## Traces\n\n| trace id | testcase | span tree |\n| -- | -- | -- |\n")
 
 	for _, r := range l.rows {

@@ -785,3 +785,26 @@ Every testcase carries its state against the previous run of the set that has it
 The previous outcome is the `current` column of `## Dynamics` of the earlier REPORT.md; a REPORT.md written before it
 gives the outcome from the verdict and the step share of its `## Schemes` case row. Point tests:
 `runartifacts/dynamics_test.go` (`TestDynamicsAgainstThePreviousRun`, `TestDynamicsVerdict`).
+
+## Zone of fix responsibility in every file
+
+Every testcase names who fixes it, `fix in`, in every file of the run folder, the passed ones too:
+
+| Value | When |
+| -- | -- |
+| `<service> · <span> — the deepest failed span of trace <trace_id>` | the deepest failed span of its traces (`tempo.Culprit`) |
+| `not established (<reason>)` | no trace id, no span tree saved, no span failed, the testcase did not end |
+| `— (nothing to fix: the testcase passed)` | the testcase passed |
+
+A testcase that did not pass links the value to its fix file `fixes/<service>/<NN>-<testcase>.md`.
+
+| Where | What |
+| -- | -- |
+| REPORT.md | `## Fix responsibility`: `testcase`, `verdict`, `fix in` for every testcase; the `fix in` column of `## Testsuites`, each fix file once |
+| protocols/INDEX.md | the column `fix in` |
+| PROBLEMS.md | the column `fix in` |
+| every protocol | the line `fix in: …` above `## Links` |
+| case scheme, testsuite zoom | `- fix in: …` |
+| live scheme | the anchor `⟦<case>:fix⟧` |
+
+Point test: `runartifacts/dynamics_test.go` (`TestFixInEveryFile`).

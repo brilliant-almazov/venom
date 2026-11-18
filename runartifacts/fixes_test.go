@@ -108,10 +108,13 @@ func TestFixesFolderPerService(t *testing.T) {
 	assert.Contains(t, unknown, "- got: ❌ 404 · expected 200 got 404\n")
 	assert.Contains(t, unknown, "- SB-03-01-03 monolith: "+noNorm+" — ")
 
-	const billingFix = "[svc-billing · billing.v1.Accounts/Create](fixes/svc-billing/01-SB-03-01-01-create.md)"
+	const billingFix = "[svc-billing · billing.v1.Accounts/Create — the deepest failed span of trace " + traceOK +
+		"](fixes/svc-billing/01-SB-03-01-01-create.md)"
 	const unknownFix = "[not established (the call returned no trace id)](fixes/not-established/01-SB-03-01-03-monolith.md)"
+	const againFix = "[svc-billing · billing.v1.Accounts/Create — the deepest failed span of trace " + traceLost +
+		"](fixes/svc-billing/01-SB-03-01-01-create.md)"
 	problems := read(ProblemsFile)
-	assert.Regexp(t, `\| SB-03-01-02 create again \|.*\| `+regexp.QuoteMeta(billingFix)+` \|`, problems)
+	assert.Regexp(t, `\| SB-03-01-02 create again \|.*\| `+regexp.QuoteMeta(againFix)+` \|`, problems)
 	assert.Regexp(t, `\| SB-03-01-03 monolith \|.*\| `+regexp.QuoteMeta(unknownFix)+` \|`, problems)
 	assert.Contains(t, read(ReportFile), "| ❌ 0/3 | "+emptyBar+" | "+billingFix+"; "+unknownFix+" |")
 }

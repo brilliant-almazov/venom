@@ -9,9 +9,13 @@ import (
 	"github.com/ovh/venom/executors/tempo"
 )
 
-// The service to fix of a testcase that did not pass, as PROBLEMS.md, REPORT.md and its protocol name it explicitly.
+// The service to fix of a testcase — the zone of fix responsibility —, as every file of the run folder names it
+// explicitly.
 const (
 	wordFixer  = "fix in"
+	headFix    = "Fix responsibility"
+	fixPassed  = "nothing to fix: the testcase passed"
+	whyCulprit = "the deepest failed span of trace %s"
 	notFound   = "not established"
 	notEnded   = "the testcase did not end"
 	noTraceID  = "the call returned no trace id"
@@ -102,11 +106,28 @@ func fixerOfRow(r row) fixer {
 	return r.fixer
 }
 
-// fixerCell is the service to fix of the row, «—» for a testcase that passed.
-func fixerCell(r row) string {
+// fixDetail is the zone of fix responsibility of the row in full, for every testcase: «<service> · <span> — the deepest
+// failed span of trace <id>», «not established (<reason>)», «— (nothing to fix: the testcase passed)».
+func fixDetail(r row) string {
 	if passed(r) {
-		return noValue
+		return noValue + " (" + fixPassed + ")"
 	}
 
-	return cell(fixerOfRow(r).String())
+	f := fixerOfRow(r)
+
+	if f.service == "" {
+		return f.String()
+	}
+
+	return f.String() + " — " + fmt.Sprintf(whyCulprit, f.trace)
+}
+
+// fixCell is the zone of fix responsibility of the row in full, linked to its fix file when it did not pass.
+func (l layout) fixCell(from string, r row) string {
+	file, ok := l.fileOf[rowKey(r)]
+	if !ok {
+		return cell(fixDetail(r))
+	}
+
+	return link(cell(fixDetail(r)), from, file)
 }
