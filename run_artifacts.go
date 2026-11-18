@@ -52,6 +52,8 @@ type ProtocolView struct {
 	Expected []string
 	// Steps are the transitions of the testcase in file order: every step of the scenario, run or not.
 	Steps []StepView
+	// Criticality and Kind are the info lines criticality and kind of the testcase, ProblemNotSet when it declares none.
+	Criticality, Kind string
 }
 
 // StepView is one step of a testcase, a transition of its scheme.

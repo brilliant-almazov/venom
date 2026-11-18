@@ -10,3 +10,24 @@ outcomes:
   - partial
   - failed
   - not-run
+
+# criticality is the scale of how critical the problem of a testcase that did not pass is, its levels from the most
+# critical down; a testcase declares its level by the info line «criticality: <name>». PROBLEMS.md and REPORT.md order
+# the problems by kind, then by this scale; a testcase that declares none is «not set», after every level.
+criticality:
+  - name: critical
+    means: blocks the product, fixed at once
+  - name: important
+    means: breaks a scenario, fixed in the current iteration
+  - name: tolerable
+    means: can wait
+
+# kinds are the kinds of the scenario of a testcase from the first to fix; a testcase declares its kind by the info line
+# «kind: <name>»; a testcase that declares none is «not set», after every kind.
+kinds:
+  - name: business
+    means: a business scenario, in priority
+  - name: technical
+    means: a critical technical point, partitions of a database for one
+  - name: qa
+    means: a scenario of QA only, may wait

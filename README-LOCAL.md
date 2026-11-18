@@ -808,3 +808,31 @@ A testcase that did not pass links the value to its fix file `fixes/<service>/<N
 | live scheme | the anchor `⟦<case>:fix⟧` |
 
 Point test: `runartifacts/dynamics_test.go` (`TestFixInEveryFile`).
+
+## Problems by priority
+
+Every testcase that did not pass is a problem with an index the same in every run, `P-<testcase name as a file name>`
+(`P-SB-03-01-02-row`), the kind of its scenario and its criticality. A testcase declares both by its info lines:
+
+```yaml
+info:
+  - "kind: business"
+  - "criticality: critical"
+```
+
+The kinds and the criticality scale, each from the first to fix with what each level means, come from the base
+configuration `venomrc.base.yaml`, keys `kinds` (`business`, `technical`, `qa`) and `criticality` (`critical`,
+`important`, `tolerable`), each level `{name, means}`; a `.venomrc` key `kinds` or `criticality` replaces the list, a
+level with no name is an error. A testcase that declares none is `not set`; a level the scale does not have is
+`<name> (not in the scale)`; both go after every level.
+
+PROBLEMS.md lists the problems by priority — by kind, then by criticality, testcase order on a tie — with the columns
+`problem`, `kind`, `criticality` first; REPORT.md carries the same order in `## Problems by priority` (`problem`,
+`testcase`, `kind`, `criticality`, `verdict`, `fix in`); the protocol of a testcase that did not pass carries the line
+`problem: <index> · kind: <kind (means)> · criticality: <level (means)>` above `fix in`.
+
+When the deepest failed spans of the traces of a testcase lie in more than one service, `fix in` is
+`both: <service> + <service> · <span> + <span> — the deepest failed span of each trace of the testcase`.
+
+Point tests: `problem_scale_test.go` (`TestProblemScalesFromConfig`), `runartifacts/priority_test.go`
+(`TestProblemsByPriority`, `TestFixBoth`).

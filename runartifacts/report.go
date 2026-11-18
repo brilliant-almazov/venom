@@ -144,6 +144,7 @@ func (l layout) writeReport(w *Writer) error {
 		fmt.Fprintf(&b, "| case | %s | %s | %s |\n", link(cell(r.testcase), base, l.caseScheme(r)), verdictOf(r), stepShare(r))
 	}
 
+	l.writePriority(&b, base)
 	l.writeDynamics(&b)
 	b.WriteString("\n## " + headFix + "\n\n| testcase | verdict | " + wordFixer + " |\n| -- | -- | -- |\n")
 

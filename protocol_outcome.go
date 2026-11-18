@@ -36,18 +36,28 @@ var protocolOutcomes = []string{protocolOutcomeOK, protocolOutcomePartial, proto
 //go:embed venomrc.base.yaml
 var baseConfig []byte
 
+// baseRC is venomrc.base.yaml as read: the outcomes, the criticality scale and the kinds of a scenario.
+type baseRC struct {
+	Outcomes    []string       `yaml:"outcomes"`
+	Criticality []ProblemLevel `yaml:"criticality"`
+	Kinds       []ProblemLevel `yaml:"kinds"`
+}
+
+// mustBase is venomrc.base.yaml as read; the binary carries it, so an error in it is a broken build.
+func mustBase() baseRC {
+	var base baseRC
+	if err := yaml.Unmarshal(baseConfig, &base); err != nil {
+		panic(fmt.Sprintf("venomrc.base.yaml: %v", err))
+	}
+	return base
+}
+
 // writtenOutcomes are the outcomes written in the names of the protocols and of their testsuite folders, the key
 // outcomes of venomrc.base.yaml until a .venomrc sets its own (SetProtocolOutcomes).
 var writtenOutcomes = mustBaseOutcomes()
 
 func mustBaseOutcomes() map[string]bool {
-	var base struct {
-		Outcomes []string `yaml:"outcomes"`
-	}
-	if err := yaml.Unmarshal(baseConfig, &base); err != nil {
-		panic(fmt.Sprintf("venomrc.base.yaml: %v", err))
-	}
-	written, err := outcomeSet(base.Outcomes)
+	written, err := outcomeSet(mustBase().Outcomes)
 	if err != nil {
 		panic(fmt.Sprintf("venomrc.base.yaml: %v", err))
 	}

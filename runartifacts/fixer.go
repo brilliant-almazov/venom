@@ -14,8 +14,10 @@ import (
 const (
 	wordFixer  = "fix in"
 	headFix    = "Fix responsibility"
+	wordBoth   = "both"
 	fixPassed  = "nothing to fix: the testcase passed"
 	whyCulprit = "the deepest failed span of trace %s"
+	whyBoth    = "the deepest failed span of each trace of the testcase"
 	notFound   = "not established"
 	notEnded   = "the testcase did not end"
 	noTraceID  = "the call returned no trace id"
@@ -37,8 +39,9 @@ func (f fixer) String() string {
 	return f.service + " · " + f.span
 }
 
-// fixerOf is the service to fix of a testcase that ended: the service and the span of the deepest failed span of its
-// traces, the call's first (tempo.Culprit), else «not established (<reason>)».
+// fixerOf is the service to fix of a testcase that ended: the service and the span of the deepest failed span of each
+// of its traces, the call's first (tempo.Culprit) — «both: …» when they lie in more than one service —, else «not
+// established (<reason>)».
 func fixerOf(view venom.ProtocolView) fixer {
 	ids := []string{}
 	seen := map[string]bool{}
@@ -55,6 +58,7 @@ func fixerOf(view venom.ProtocolView) fixer {
 	}
 
 	reason := ""
+	var found []fixer
 
 	for _, id := range ids {
 		f, ok := view.Trees[id]
@@ -70,13 +74,40 @@ func fixerOf(view venom.ProtocolView) fixer {
 		}
 
 		if service, span, ok := tempo.Culprit(body); ok {
-			return fixer{service: service, span: span, trace: id}
+			found = append(found, fixer{service: service, span: span, trace: id})
+			continue
 		}
 
 		reason = orFirst(reason, fmt.Sprintf(noFailure, id))
 	}
 
-	return fixer{trace: ids[0], reason: reason}
+	if len(found) == 0 {
+		return fixer{trace: ids[0], reason: reason}
+	}
+
+	return bothOf(found)
+}
+
+// bothOf is the service to fix of the culprits of the traces of a testcase, the call's first: that service when they
+// all lie in one, else «both: <service> + <service>» with the span of each.
+func bothOf(found []fixer) fixer {
+	first := found[0]
+	services, spans := []string{first.service}, []string{first.span}
+	seen := map[string]bool{first.service: true}
+
+	for _, f := range found[1:] {
+		if !seen[f.service] {
+			seen[f.service] = true
+			services = append(services, f.service)
+			spans = append(spans, f.span)
+		}
+	}
+
+	if len(services) == 1 {
+		return first
+	}
+
+	return fixer{service: wordBoth + ": " + strings.Join(services, " + "), span: strings.Join(spans, " + "), trace: first.trace}
 }
 
 func stepTraces(view venom.ProtocolView) []string {
@@ -115,11 +146,16 @@ func fixDetail(r row) string {
 
 	f := fixerOfRow(r)
 
-	if f.service == "" {
+	switch {
+	case f.service == "":
 		return f.String()
-	}
 
-	return f.String() + " — " + fmt.Sprintf(whyCulprit, f.trace)
+	case strings.HasPrefix(f.service, wordBoth+": "):
+		return f.String() + " — " + whyBoth
+
+	default:
+		return f.String() + " — " + fmt.Sprintf(whyCulprit, f.trace)
+	}
 }
 
 // fixCell is the zone of fix responsibility of the row in full, linked to its fix file when it did not pass.

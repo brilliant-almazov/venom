@@ -75,6 +75,10 @@ func (w *Writer) links(r *row) string {
 	from := filepath.Dir(r.protocol)
 	var b strings.Builder
 
+	if !passed(*r) {
+		b.WriteString(problemLine(*r) + "\n\n")
+	}
+
 	fmt.Fprintf(&b, "%s: %s\n\n", wordFixer, l.fixCell(from, *r))
 
 	b.WriteString(headLinks + "\n\n")
