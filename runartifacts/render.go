@@ -13,7 +13,7 @@ import (
 // stand.
 func (w *Writer) refresh(ctx context.Context, r *row) {
 	l := w.layout()
-	errs := []error{l.writeIndex(), l.writeFixes(), l.writeReport(w), l.writeProblems(w)}
+	errs := []error{l.writeIndex(), l.writeFixes(), l.writeReport(w), l.writeProblems()}
 
 	if w.intake() {
 		errs = append(errs, w.fillSchemes(ctx))
@@ -33,7 +33,7 @@ func (w *Writer) refresh(ctx context.Context, r *row) {
 // those drawn at intake, or with none every scheme drawn from the run and the zoom set.
 func (w *Writer) render(ctx context.Context) error {
 	l := w.layout()
-	errs := []error{l.writeIndex(), l.writeFixes(), l.writeReport(w), l.writeProblems(w)}
+	errs := []error{l.writeIndex(), l.writeFixes(), l.writeReport(w), l.writeProblems()}
 
 	if w.intake() {
 		errs = append(errs, w.fillSchemes(ctx))

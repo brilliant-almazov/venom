@@ -88,7 +88,7 @@ func traceGate(tc *TestCase) {
 		if where == "" {
 			where = "no step was given trace_dir or traces"
 		}
-		call.Errors = append(call.Errors, Failure{Value: fmt.Sprintf("trace %s returned by the call has no saved span tree: %s", id, where)})
+		call.Errors = append(call.Errors, Failure{Value: fmt.Sprintf(traceGateFailure, id, where)})
 		call.Status = StatusFail
 		tc.Status = StatusFail
 	}

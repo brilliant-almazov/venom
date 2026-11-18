@@ -148,9 +148,12 @@ func TestRunOfEveryOutcome(t *testing.T) {
 	assert.Contains(t, readRun(t, run, "schemes/rows/SB-02-01-01-green.md"), "- expected: expect: the row is read")
 	problems := readRun(t, run, ProblemsFile)
 
-	for _, name := range []string{"SB-02-01-02 should", "SB-02-01-03 must", "SB-02-01-04 skipped", "SB-02-01-05 half"} {
+	for _, name := range []string{"SB-02-01-02 should", "SB-02-01-03 must", "SB-02-01-05 half"} {
 		assert.Contains(t, problems, "| "+name+" |")
 	}
+
+	// a skipped testcase is no defect of the product
+	assert.NotContains(t, problems, "SB-02-01-04 skipped")
 
 	// the protocols folder of the testsuite carries its outcome: one ok, one partial, two failed, one not-run is partial
 	assert.NoDirExists(t, filepath.Join(run, ProtocolsDir, "SB-02-01-failed-outcomes"))

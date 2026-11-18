@@ -620,7 +620,7 @@ or drawing by hand (package `runartifacts`):
 | `<run>/schemes/02-paths/<path>.md` | the path with its bar and history, its processes, every testsuite of it with its bar, its testcases with the bar of their steps and the history of the testsuite |
 | `<run>/schemes/03-suites/<testsuite>.md` | the testsuite with its bar, history and processes, then every testcase: verdict, outcome, bar of its steps, scenario line, protocol, scheme, every trace id, its steps drawn — executor, method and url, database, the SQL text verbatim line by line, every assertion, the trace id, the reason of a step not ok — its processes, and the table of its steps |
 | `<run>/REPORT.md` | the verdict and the counts of the run and `- previous run:` with the counts of every outcome against the previous run, `## Dynamics` with every testcase against the previous run (section «Dynamics against the previous run»), start and end, the reason a run ended early, every path, every testsuite with a link to its protocols folder and, for a red one, the services to fix (`fix in`), each linked to its fix file, every slice of the scheme — system, path, case — with its link, verdict and share, every trace id with its tree; the verdict line and every row of `## Paths` and `## Testsuites` carry the progress bar of the block, the row in its own `bar` column right after `verdict`; every count of testcases, in REPORT.md and the schemes, is followed by the share of the outcomes `ok N% · partial N% · failed N% · not-run N%` in whole % |
-| `<run>/PROBLEMS.md` | every testcase that did not pass — failed, skipped, interrupted, not run — with its first failed step, the reason, the scenario line, the protocol, the scheme, the trace and `fix in`, linked to its fix file: the service and the span of the deepest failed span of its traces — OTLP status error or a gRPC status code not OK (`tempo.Culprit`) — else `not established (<reason>)`: no trace id, no span tree saved, no span failed, the testcase did not end; the protocol of a testcase that did not pass carries the same line `fix in: <service> · <span>` above `## Links` |
+| `<run>/PROBLEMS.md` | the real defects of the run on a stand set up right (section «Problems by priority»): every testcase that ended failed on the product — none skipped, interrupted, not run or pending, none red for the stand, no error of the run — with its first failed step, the reason, the scenario line, the protocol, the scheme, the trace and `fix in`, linked to its fix file: the service and the span of the deepest failed span of its traces — OTLP status error or a gRPC status code not OK (`tempo.Culprit`) — else `not established (<reason>)`: no trace id, no span tree saved, no span failed, the testcase did not end; the protocol of a testcase that did not pass carries the same line `fix in: <service> · <span>` above `## Links` |
 | `<run>/fixes/INDEX.md`, `<run>/fixes/<service>/INDEX.md`, `<run>/fixes/<service>/<NN>-<testcase>.md` | the fixes of the run, one folder per service to fix (`fix in`, named by its `service.name` as a slug) and one file per fix: a fix is one red testcase, or one cause shared by several — the same service and span to fix and the same reason of the first failed step — with the list of its testcases; the file says where (the service, the span of the failure, every trace id with a link to its span tree), what to do (per testcase: the failed step with its scenario line, the call, `expected` from the info lines happens / expect / right, `got` — the mark, the answer code and the reason — and the body the step answered, secrets hidden), why (the `norm` lines of each testcase with the scenario line of the testcase, `the scenario names no norm` without one) and the links to the protocols, the schemes, REPORT.md, PROBLEMS.md and the indexes; a testcase whose service is not established lies in `fixes/not-established/` with the reason; `fixes/INDEX.md` is every service with its count of fixes and testcases, `fixes/<service>/INDEX.md` every fix with its testcases, step and reason; the `fix in` cell of every red testcase of PROBLEMS.md and REPORT.md links its fix file, and a red testcase with no fix file refuses the write of both (`testcase <name> did not pass and has no fix file`) |
 | `<run>/raw/` | every other output of Venom: the reports, `venom.log`, dumps, `io.jsonl` (section 28), the traces fetched from Tempo; `--run-dir` replaces `--output-dir` |
 
@@ -683,7 +683,7 @@ PROBLEMS.md, SYSTEM.md, the scheme of its path and of its case and the zoom set 
 | skipped by `skip:` or by `--stop-on-failure` | the protocol of section 10, ⏭ / ⏸ |
 | a testcase under way when the run is killed (SIGKILL too) | written as `⏸ interrupted: the run ended before the testcase did` the moment it starts, replaced when it ends |
 | interrupted by SIGINT or SIGTERM | the testcase under way `⏸ interrupted: interrupted by signal <name>`, every testcase not started `⏸ not run: …`; exit 128 + the signal number |
-| the run stopped by an error of its setup (YAML, vars, a testsuite that cannot start) or of the report | every testcase `⏸ not run: setup failed: …` / `run stopped: …`; REPORT.md and PROBLEMS.md carry the error |
+| the run stopped by an error of its setup (YAML, vars, a testsuite that cannot start) or of the report | every testcase `⏸ not run: setup failed: …` / `run stopped: …`; REPORT.md carries the error, PROBLEMS.md does not: an error of the run is no defect of the product |
 | the runner panics | every testcase not ended `⏸ … runner crashed: panic: …`, then the panic goes on; a panic inside a testcase run in parallel ends the process at once, and the folder holds what was written as each testcase began and ended |
 
 Every testcase of the parsed testsuites is in INDEX.md from the start of the run, `⏸ pending` until it starts.
@@ -811,7 +811,21 @@ Point test: `runartifacts/dynamics_test.go` (`TestFixInEveryFile`).
 
 ## Problems by priority
 
-Every testcase that did not pass is a problem with an index the same in every run, `P-<testcase name as a file name>`
+A problem is a real defect on a stand set up right: a testcase that ended failed on the product. PROBLEMS.md and
+`## Problems by priority` of REPORT.md leave out every testcase skipped, interrupted, not run or pending, the error of
+a run that ended early, and every failed testcase red for the stand (`ProtocolView.Stand`, `stand_red.go`), the first
+that holds:
+
+| Red for the stand | `Stand` |
+| -- | -- |
+| a testcase whose name starts with `setup` or `teardown` (any case), or any testcase of a file under `scenarios/preflight/` | `a setup or teardown testcase failed` |
+| a failed step of the stand utility, `cli`, `seed` or `stand_status` | `the stand step N "<name>" failed` |
+| a precondition read that did not hold (section 10, `State before` «❌ not confirmed») | `the precondition <entity> · <key> did not hold` |
+| every failure of the testcase is the trace gate: the span tree of the call was not saved | `the span tree of the call was not saved` |
+
+INDEX.md, REPORT.md, the protocols and the schemes still carry every testcase with its verdict.
+
+Each problem has an index the same in every run, `P-<testcase name as a file name>`
 (`P-SB-03-01-02-row`), the kind of its scenario and its criticality. A testcase declares both by its info lines:
 
 ```yaml
@@ -834,5 +848,5 @@ PROBLEMS.md lists the problems by priority — by kind, then by criticality, tes
 When the deepest failed spans of the traces of a testcase lie in more than one service, `fix in` is
 `both: <service> + <service> · <span> + <span> — the deepest failed span of each trace of the testcase`.
 
-Point tests: `problem_scale_test.go` (`TestProblemScalesFromConfig`), `runartifacts/priority_test.go`
-(`TestProblemsByPriority`, `TestFixBoth`).
+Point tests: `problem_scale_test.go` (`TestProblemScalesFromConfig`), `stand_red_test.go` (`TestStandRed`),
+`runartifacts/priority_test.go` (`TestProblemsByPriority`, `TestProblemsOnlyRealDefects`, `TestFixBoth`).

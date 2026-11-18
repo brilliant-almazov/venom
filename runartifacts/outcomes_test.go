@@ -81,7 +81,7 @@ func TestKilledRunLeavesInterrupted(t *testing.T) {
 	index := readRun(t, run, "protocols/INDEX.md")
 	assert.Contains(t, index, "| SB-01-01 link | SB-01-01-01 create link | ✅ 200 |")
 	assert.Contains(t, index, "| SB-01-01 link | SB-01-01-02 read link | ⏸ interrupted |")
-	assert.Contains(t, readRun(t, run, ProblemsFile), "| SB-01-01-02 read link | identifier-link | ⏸ interrupted |")
+	assert.NotContains(t, readRun(t, run, ProblemsFile), "SB-01-01-02 read link", "an interrupted testcase is no defect")
 	assert.Contains(t, readRun(t, run, ReportFile), "- end: under way")
 	assert.Contains(t, readRun(t, run, "schemes/SYSTEM.md"), "SB-01-01-02 read link · ⏸ interrupted")
 }
@@ -102,21 +102,23 @@ func TestAbortedRunNamesEveryTestcase(t *testing.T) {
 		"⏸ interrupted: interrupted by signal terminated")
 	assert.Contains(t, readRun(t, run, "protocols/SB-01-01-not-run-link/SB-01-01-02-not-run-read-link.md"),
 		"⏸ not run: interrupted by signal terminated")
-	assert.Contains(t, readRun(t, run, ProblemsFile), "- run ended early: interrupted by signal terminated")
+	assert.NotContains(t, readRun(t, run, ProblemsFile), "run ended early", "an error of the run is no defect")
 	assert.Contains(t, readRun(t, run, ReportFile), "- run ended early: interrupted by signal terminated")
 
 	w.Testcase(ctx, ts, &ts.TestCases[1])
 	assert.Contains(t, readRun(t, run, "protocols/SB-01-01-not-run-link/SB-01-01-02-not-run-read-link.md"), "⏸ not run")
 }
 
-// A setup error before any testcase ran still writes protocols/INDEX.md, REPORT.md and PROBLEMS.md with the error.
+// A setup error before any testcase ran still writes protocols/INDEX.md, REPORT.md with the error and PROBLEMS.md
+// without it: an error of the run is no defect of the product.
 func TestSetupFailureWritesTheRunFolder(t *testing.T) {
 	run := filepath.Join(t.TempDir(), "run")
 	w := New(run)
 	require.NoError(t, w.Abort(context.Background(), "setup failed: missing variables [x]"))
 
 	assert.Contains(t, readRun(t, run, "protocols/INDEX.md"), indexHeader)
-	assert.Contains(t, readRun(t, run, ProblemsFile), "setup failed: missing variables [x]")
+	assert.NotContains(t, readRun(t, run, ProblemsFile), "setup failed")
+	assert.Contains(t, readRun(t, run, ProblemsFile), "| no problems |")
 	assert.Contains(t, readRun(t, run, ReportFile), "setup failed: missing variables [x]")
 }
 

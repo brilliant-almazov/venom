@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
@@ -117,9 +116,7 @@ var (
 // has no call»): it holds a call step, and no step before the first call asserts Must…, a failed one would stop the
 // testcase before the call. A setup… or teardown… testcase and the files of scenarios/preflight are not checked.
 func dryRunTestCaseForm(ts *TestSuite, tc *TestCase) error {
-	name := strings.ToLower(tc.Name)
-	if strings.HasPrefix(name, "setup") || strings.HasPrefix(name, "teardown") ||
-		strings.Contains(filepath.ToSlash(ts.Filepath), "scenarios/preflight/") {
+	if isStandCase(ts, tc) {
 		return nil
 	}
 	for i, raw := range tc.RawTestSteps {

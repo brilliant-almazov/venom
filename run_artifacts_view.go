@@ -31,6 +31,7 @@ func ProtocolOf(ctx context.Context, ts *TestSuite, tc *TestCase) ProtocolView {
 		Trees:   map[string]string{},
 		Reason:  protocolReason(tc),
 		Hops:    map[string]HopView{},
+		Stand:   standRed(ts, tc),
 	}
 	if view.TraceID != "" {
 		view.TraceFile, _ = protocolTreeFile(tc, view.TraceID)

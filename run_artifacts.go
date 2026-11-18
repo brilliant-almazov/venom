@@ -54,6 +54,9 @@ type ProtocolView struct {
 	Steps []StepView
 	// Criticality and Kind are the info lines criticality and kind of the testcase, ProblemNotSet when it declares none.
 	Criticality, Kind string
+	// Stand is why a failed testcase is red for the stand set up wrong and not for the product, empty otherwise
+	// (standRed).
+	Stand string
 }
 
 // StepView is one step of a testcase, a transition of its scheme.
