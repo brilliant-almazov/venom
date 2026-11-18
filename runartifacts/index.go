@@ -8,7 +8,8 @@ import (
 )
 
 // indexHeader is the table of protocols/INDEX.md, one row per testcase.
-const indexHeader = "| suite | testcase | verdict | trace | link | scenario | scheme | path |\n| -- | -- | -- | -- | -- | -- | -- | -- |\n"
+const indexHeader = "| suite | testcase | verdict | trace | link | scenario | scheme | path | previous | " + wordFixer + " |\n" +
+	"| -- | -- | -- | -- | -- | -- | -- | -- | -- | -- |\n"
 
 // noTree is the trace cell of a call whose trace id has no span tree in Tempo.
 const noTree = "trace not saved"
@@ -30,7 +31,8 @@ func sortRows(rows []row) {
 	})
 }
 
-// writeIndex writes protocols/INDEX.md: one row per testcase with its verdict, trace, protocol, scenario line and scheme.
+// writeIndex writes protocols/INDEX.md: one row per testcase with its verdict, trace, protocol, scenario line, scheme
+// its state against the previous run and its zone of fix responsibility.
 func (l layout) writeIndex() error {
 	base := filepath.Dir(l.index())
 	var b strings.Builder
@@ -45,7 +47,8 @@ func (l layout) writeIndex() error {
 	}
 
 	c := countOf(l.rows)
-	fmt.Fprintf(&b, "- system %s · %s · %s\n\n%s", link(SystemFile, base, l.systemScheme()), c.mark(), c.share(), indexHeader)
+	fmt.Fprintf(&b, "- system %s · %s · %s\n%s%s\n\n%s", link(SystemFile, base, l.systemScheme()), c.mark(), c.share(),
+		previousKey, l.previousTotal(c), indexHeader)
 
 	for _, r := range l.rows {
 		protocol := noValue
@@ -55,9 +58,9 @@ func (l layout) writeIndex() error {
 		}
 
 		path := l.pathOf(r)
-		fmt.Fprintf(&b, "| %s | %s | %s | %s | %s | %s | %s | %s |\n", cell(r.suite), cell(r.testcase), verdictOf(r),
+		fmt.Fprintf(&b, "| %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |\n", cell(r.suite), cell(r.testcase), verdictOf(r),
 			traceCell(base, r), protocol, scenarioLink(base, r, r.view.Line), link(wordScheme, base, l.caseScheme(r)),
-			link(cell(path), base, l.pathScheme(path)))
+			link(cell(path), base, l.pathScheme(path)), l.dynamicsOf(r), l.fixCell(base, r))
 	}
 
 	return writeFile(l.index(), []byte(b.String()))

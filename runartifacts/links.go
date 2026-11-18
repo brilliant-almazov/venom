@@ -76,8 +76,10 @@ func (w *Writer) links(r *row) string {
 	var b strings.Builder
 
 	if !passed(*r) {
-		fmt.Fprintf(&b, "%s: %s\n\n", wordFixer, fixerCell(*r))
+		b.WriteString(problemLine(*r) + "\n\n")
 	}
+
+	fmt.Fprintf(&b, "%s: %s\n\n", wordFixer, l.fixCell(from, *r))
 
 	b.WriteString(headLinks + "\n\n")
 	fmt.Fprintf(&b, "- scenario: %s\n", scenarioLink(from, *r, r.view.Line))
@@ -101,6 +103,7 @@ func (w *Writer) links(r *row) string {
 	fmt.Fprintf(&b, "- scheme of the system: %s\n", link(SystemFile, from, l.systemScheme()))
 	fmt.Fprintf(&b, "- run: %s · %s · %s\n", link(IndexFile, from, l.index()), link(ReportFile, from, l.report()),
 		link(ProblemsFile, from, l.problems()))
+	fmt.Fprintf(&b, "- previous: %s\n", l.dynamicsOf(*r))
 
 	return b.String()
 }

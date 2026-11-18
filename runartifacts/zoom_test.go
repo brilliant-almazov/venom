@@ -13,8 +13,11 @@ import (
 	"github.com/ovh/venom"
 )
 
-// emptyBar is the bar of a block where no testcase is ok.
+// emptyBar is the bar of a block where every testcase failed.
 const emptyBar = "[░░░░░░░░░░░░░░░░░░░░] 0 %"
+
+// noTestcaseBar is the bar of a block with no testcase: all not-run.
+const noTestcaseBar = "[····················] 0 %"
 
 func TestProgress(t *testing.T) {
 	for _, tc := range []struct {
@@ -27,7 +30,7 @@ func TestProgress(t *testing.T) {
 		{"a share gets a cell", count{all: 100, ok: 1, notOK: 99}, "[█░░░░░░░░░░░░░░░░░░░] 1 %"},
 		{"partial from the largest", count{all: 100, ok: 98, partial: 1, notOK: 1}, "[██████████████████▒░] 98 %"},
 		{"half up", count{all: 8, ok: 1, notOK: 7}, "[███░░░░░░░░░░░░░░░░░] 13 %"},
-		{"no testcase", count{}, emptyBar},
+		{"no testcase", count{}, noTestcaseBar},
 		{"every testcase ok", count{all: 3, ok: 3}, "[████████████████████] 100 %"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -138,7 +141,7 @@ func TestZoomSet(t *testing.T) {
 
 	w.Plan(&venom.Tests{TestSuites: []venom.TestSuite{*ts}})
 	w.Testcase(ctx, ts, &ts.TestCases[0])
-	assert.Contains(t, read(ZoomRunFile), "run 2026-11/17-13  [██████████░░░░░░░░░░] 50 %  ⏸ 1/2")
+	assert.Contains(t, read(ZoomRunFile), "run 2026-11/17-13  [██████████··········] 50 %  ⏸ 1/2")
 
 	w.Testcase(ctx, ts, &ts.TestCases[1])
 	require.NoError(t, w.Finish(ctx, &venom.Tests{}))

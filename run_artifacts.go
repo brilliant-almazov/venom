@@ -52,6 +52,8 @@ type ProtocolView struct {
 	Expected []string
 	// Steps are the transitions of the testcase in file order: every step of the scenario, run or not.
 	Steps []StepView
+	// Criticality and Kind are the info lines criticality and kind of the testcase, ProblemNotSet when it declares none.
+	Criticality, Kind string
 }
 
 // StepView is one step of a testcase, a transition of its scheme.
@@ -134,22 +136,26 @@ func ProtocolFileName(name string) string {
 // protocolRowID is the row id a testcase name starts with: SB-01-01, SB-02-01-03, GW-B0005, S-001.
 var protocolRowID = regexp.MustCompile(`^[A-Z][A-Z0-9]*(?:-[A-Z]?[0-9][0-9A-Z]*)+`)
 
-// ProtocolOutcome is the outcome ok, partial or failed of the testcase (section 10), never empty.
+// ProtocolOutcome is the outcome ok, partial, failed or not-run of the testcase (section 10), never empty.
 func ProtocolOutcome(tc *TestCase) string {
 	return protocolOutcome(tc)
 }
 
 // ProtocolOutcomeFile is the file name of the protocol of a testcase that ended, with no extension: its outcome ok,
-// partial or failed (section 10) in the name by ProtocolOutcomeName.
+// partial, failed or not-run (section 10) in the name by ProtocolOutcomeName.
 func ProtocolOutcomeFile(tc *TestCase) string {
 	return ProtocolOutcomeName(CaseName(tc), protocolOutcome(tc))
 }
 
 // ProtocolOutcomeName is the file name of the protocol of the testcase named name with the outcome o, with no
 // extension: o between the row id and the rest of the name, <row id>-<o>-<rest>, or first, <o>-<name>, when the name
-// has no row id. Every protocol carries an outcome: a testcase that did not end is named with ProtocolOutcomeFailed.
+// has no row id; the name alone when o is not among the outcomes written (SetProtocolOutcomes). A testcase that did not
+// end is named with ProtocolOutcomeNotRun.
 func ProtocolOutcomeName(name, o string) string {
 	n := protocolFileName(name)
+	if !writtenOutcomes[o] {
+		return n
+	}
 	id := protocolRowID.FindString(n)
 	if id == "" || id == n {
 		return strings.TrimSuffix(o+"-"+n, "-")

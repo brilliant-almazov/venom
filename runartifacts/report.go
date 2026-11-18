@@ -10,10 +10,11 @@ import (
 )
 
 // count is how many testcases passed, failed and did not pass or fail (skipped, interrupted, not run, pending), and
-// how many protocols are ok, partial and failed; unrun are those of a scheme with no run that no earlier run has.
+// how many protocols are ok, partial, failed and not-run; unrun are those of a scheme with no run that no earlier run
+// has.
 type count struct {
 	all, passed, failed, other int
-	ok, partial, notOK         int
+	ok, partial, notOK, notRun int
 	unrun                      int
 }
 
@@ -28,8 +29,11 @@ func countOf(rows []row) count {
 		case venom.ProtocolOutcomePartial:
 			c.partial++
 
-		default:
+		case venom.ProtocolOutcomeFailed:
 			c.notOK++
+
+		default:
+			c.notRun++
 		}
 
 		if r.state == stateNoRun {
@@ -70,10 +74,12 @@ func (c count) String() string {
 		venom.MarkNotRun, c.other, c.share())
 }
 
-// share is the share of the protocols ok, partial and failed in %: ok 50% · partial 25% · failed 25%.
+// share is the share of the protocols ok, partial, failed and not-run in %: ok 50% · partial 25% · failed 25% ·
+// not-run 0%.
 func (c count) share() string {
-	return fmt.Sprintf("%s %s · %s %s · %s %s", venom.ProtocolOutcomeOK, percent(c.ok, c.all), venom.ProtocolOutcomePartial,
-		percent(c.partial, c.all), venom.ProtocolOutcomeFailed, percent(c.notOK, c.all))
+	return fmt.Sprintf("%s %s · %s %s · %s %s · %s %s", venom.ProtocolOutcomeOK, percent(c.ok, c.all),
+		venom.ProtocolOutcomePartial, percent(c.partial, c.all), venom.ProtocolOutcomeFailed, percent(c.notOK, c.all),
+		venom.ProtocolOutcomeNotRun, percent(c.notRun, c.all))
 }
 
 // percent is n of all in whole %, 0% of none.
@@ -85,13 +91,14 @@ func percent(n, all int) string {
 	return fmt.Sprintf("%d%%", (n*100+all/2)/all)
 }
 
-// writeReport writes REPORT.md: the state of the run, its counts, every path and every trace, with the links.
+// writeReport writes REPORT.md: the state of the run, its counts and their change against the previous run, every
+// path, every testcase against the previous run and with its zone of fix responsibility, every trace, with the links.
 func (l layout) writeReport(w *Writer) error {
 	base := dirOf(l.report())
 	c := countOf(l.rows)
 	var b strings.Builder
 	b.WriteString("# Run report\n\n")
-	fmt.Fprintf(&b, "- verdict: %s · %s\n- testcases: %s\n", c.mark(), progress(c), c)
+	fmt.Fprintf(&b, "- verdict: %s · %s\n- testcases: %s\n%s%s\n", c.mark(), progress(c), c, previousKey, l.previousTotal(c))
 	fmt.Fprintf(&b, "- start: %s\n- end: %s\n", w.start.UTC().Format(time.RFC3339), endOf(w))
 
 	if w.runErr != "" {
@@ -135,6 +142,14 @@ func (l layout) writeReport(w *Writer) error {
 
 	for _, r := range l.rows {
 		fmt.Fprintf(&b, "| case | %s | %s | %s |\n", link(cell(r.testcase), base, l.caseScheme(r)), verdictOf(r), stepShare(r))
+	}
+
+	l.writePriority(&b, base)
+	l.writeDynamics(&b)
+	b.WriteString("\n## " + headFix + "\n\n| testcase | verdict | " + wordFixer + " |\n| -- | -- | -- |\n")
+
+	for _, r := range l.rows {
+		fmt.Fprintf(&b, "| %s | %s | %s |\n", cell(r.testcase), verdictOf(r), l.fixCell(base, r))
 	}
 
 	b.WriteString("\n## Traces\n\n| trace id | testcase | span tree |\n| -- | -- | -- |\n")

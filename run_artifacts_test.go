@@ -141,9 +141,9 @@ testcases:
 	}
 }
 
-// The protocol of every testcase carries its outcome in the file name: ok, partial or failed; a skipped testcase too,
-// failed, or partial when an assertion held (run 17-9: the outcome of the run belongs in the protocol file name; nothing
-// is skipped).
+// The protocol of every testcase carries its outcome in the file name: ok, partial, failed or not-run; a testcase that
+// did not run or has not ended — skipped, interrupted, never started — is not-run, never failed, an assertion held or
+// not (run 17-9: the outcome of the run belongs in the protocol file name).
 func TestProtocolOutcomeFile(t *testing.T) {
 	applied := func(ok ...bool) TestStepResult {
 		var r TestStepResult
@@ -161,9 +161,12 @@ func TestProtocolOutcomeFile(t *testing.T) {
 	assert.Equal(t, "SB-01-01-ok-webhook", ProtocolOutcomeFile(tc(StatusPass, applied(true))))
 	assert.Equal(t, "SB-01-01-partial-webhook", ProtocolOutcomeFile(tc(StatusFail, applied(true, false))))
 	assert.Equal(t, "SB-01-01-failed-webhook", ProtocolOutcomeFile(tc(StatusFail, applied(false))))
-	assert.Equal(t, "SB-01-01-failed-webhook", ProtocolOutcomeFile(tc(StatusSkip)))
-	assert.Equal(t, "SB-01-01-partial-webhook", ProtocolOutcomeFile(tc(StatusSkip, applied(true))))
+	assert.Equal(t, "SB-01-01-not-run-webhook", ProtocolOutcomeFile(tc(StatusSkip)))
+	assert.Equal(t, "SB-01-01-not-run-webhook", ProtocolOutcomeFile(tc(StatusSkip, applied(true))))
+	assert.Equal(t, "SB-01-01-not-run-webhook", ProtocolOutcomeFile(tc(StatusRun, applied(true))))
+	assert.Equal(t, "SB-01-01-not-run-webhook", ProtocolOutcomeFile(tc("")))
 	assert.Equal(t, "SB-01-01-failed-webhook", ProtocolOutcomeName("SB-01-01 webhook", ProtocolOutcomeFailed))
+	assert.Equal(t, "SB-01-01-not-run-webhook", ProtocolOutcomeName("SB-01-01 webhook", ProtocolOutcomeNotRun))
 
 	noRowID := tc(StatusPass, applied(true))
 	noRowID.originalName = "webhook answers 200"
@@ -171,4 +174,20 @@ func TestProtocolOutcomeFile(t *testing.T) {
 	long := tc(StatusFail, applied(false))
 	long.originalName = "SB-01-01 POST webhook of a known integration answers 200 and a string id"
 	assert.Equal(t, "SB-01-01-failed-POST-webhook-of-a-known-integration-answers-200-and-a-string-id", ProtocolOutcomeFile(long))
+}
+
+// The outcomes written in the protocol names come from the base configuration venomrc.base.yaml, all four; a .venomrc
+// key outcomes replaces them, an outcome left out is not written and an unknown one is an error.
+func TestProtocolOutcomesFromConfig(t *testing.T) {
+	t.Cleanup(func() { writtenOutcomes = mustBaseOutcomes() })
+	assert.Equal(t, map[string]bool{"ok": true, "partial": true, "failed": true, "not-run": true}, writtenOutcomes)
+
+	require.NoError(t, SetProtocolOutcomes([]string{"failed"}))
+	assert.Equal(t, "SB-01-01-webhook", ProtocolOutcomeName("SB-01-01 webhook", ProtocolOutcomeNotRun))
+	assert.Equal(t, "SB-01-01-failed-webhook", ProtocolOutcomeName("SB-01-01 webhook", ProtocolOutcomeFailed))
+	skipped := &TestCase{TestCaseInput: TestCaseInput{Name: "skipped"}, Status: StatusSkip}
+	assert.Equal(t, "skipped.md", protocolFile(skipped))
+
+	assert.Error(t, SetProtocolOutcomes([]string{"skipped"}))
+	assert.Equal(t, map[string]bool{"failed": true}, writtenOutcomes)
 }

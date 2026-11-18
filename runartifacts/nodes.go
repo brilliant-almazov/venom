@@ -121,7 +121,7 @@ func (c *count) add(mark string) {
 		c.failed++
 
 	default:
-		c.partial++
+		c.notRun++
 		c.other++
 	}
 }

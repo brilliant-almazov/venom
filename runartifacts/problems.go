@@ -7,8 +7,9 @@ import (
 	"github.com/ovh/venom"
 )
 
-// writeProblems writes PROBLEMS.md: every testcase that did not pass — failed, skipped, interrupted, not run — with its
-// first failed step, the reason, the scenario line, the protocol, the scheme, the trace and the service to fix.
+// writeProblems writes PROBLEMS.md: every testcase that did not pass — failed, skipped, interrupted, not run — by
+// priority (problemsOf), with the index of its problem, its kind and criticality, its first failed step, the reason,
+// the scenario line, the protocol, the scheme, the trace and the service to fix.
 func (l layout) writeProblems(w *Writer) error {
 	base := dirOf(l.problems())
 	var b strings.Builder
@@ -18,15 +19,12 @@ func (l layout) writeProblems(w *Writer) error {
 		fmt.Fprintf(&b, "- run ended early: %s\n\n", one(w.runErr))
 	}
 
-	b.WriteString("| testcase | path | verdict | step | reason | scenario | protocol | scheme | trace | " + wordFixer + " |\n")
-	b.WriteString("| -- | -- | -- | -- | -- | -- | -- | -- | -- | -- |\n")
+	b.WriteString("| problem | kind | criticality | testcase | path | verdict | step | reason | scenario | protocol | scheme | trace | " +
+		wordFixer + " |\n")
+	b.WriteString("| -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- |\n")
 	n := 0
 
-	for _, r := range l.rows {
-		if passed(r) {
-			continue
-		}
-
+	for _, r := range problemsOf(l.rows) {
 		fix, err := l.fixLink(base, r)
 		if err != nil {
 			return err
@@ -40,13 +38,14 @@ func (l layout) writeProblems(w *Writer) error {
 			protocol = link(protocolLink, base, r.protocol)
 		}
 
-		fmt.Fprintf(&b, "| %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |\n", cell(r.testcase), cell(l.pathOf(r)),
+		fmt.Fprintf(&b, "| %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |\n", problemID(r),
+			cell(venom.KindText(levelOf(r.view.Kind))), cell(venom.CriticalityText(levelOf(r.view.Criticality))), cell(r.testcase), cell(l.pathOf(r)),
 			verdictOf(r), step, one(r.view.Reason), scenarioLink(base, r, line), protocol, link(wordScheme, base, l.caseScheme(r)),
 			traceCell(base, r), fix)
 	}
 
 	if n == 0 {
-		b.WriteString("| no problems | | | | | | | | | |\n")
+		b.WriteString("| no problems | | | | | | | | | | | | |\n")
 	}
 
 	return writeFile(l.problems(), []byte(b.String()))

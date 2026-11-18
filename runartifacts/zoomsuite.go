@@ -66,8 +66,9 @@ func (l layout) zoomCase(b *strings.Builder, base string, r row) {
 		protocol = link(protocolLink, base, r.protocol)
 	}
 
-	fmt.Fprintf(b, "## %s\n\n- verdict: %s\n- outcome: %s\n- steps: %s\n- scenario: %s\n", r.testcase, verdictOf(r),
-		outcomeOf(r), progress(stepCount(r)), scenarioLink(base, r, r.view.Line))
+	fmt.Fprintf(b, "## %s\n\n- verdict: %s\n- outcome: %s\n- previous: %s\n- %s: %s\n- steps: %s\n- scenario: %s\n",
+		r.testcase, verdictOf(r), outcomeOf(r), l.dynamicsOf(r), wordFixer, l.fixCell(base, r), progress(stepCount(r)),
+		scenarioLink(base, r, r.view.Line))
 
 	if !l.plan {
 		fmt.Fprintf(b, "- protocol: %s · scheme: %s\n", protocol, link(wordScheme, base, l.caseScheme(r)))

@@ -208,6 +208,12 @@ type ConfigFileData struct {
 	Secrets        *[]string `json:"secrets,omitempty" yaml:"secrets,omitempty"`
 	VariablesFiles *[]string `json:"variables_files,omitempty" yaml:"variables_files,omitempty"`
 	Verbosity      *int      `json:"verbosity,omitempty" yaml:"verbosity,omitempty"`
+	// Outcomes are the testcase outcomes written in the protocol names; without the key, those of venomrc.base.yaml.
+	Outcomes       *[]string `json:"outcomes,omitempty" yaml:"outcomes,omitempty"`
+
+	// Criticality and Kinds are the scales of the problems of a run; without the key, those of venomrc.base.yaml.
+	Criticality *[]venom.ProblemLevel `json:"criticality,omitempty" yaml:"criticality,omitempty"`
+	Kinds       *[]venom.ProblemLevel `json:"kinds,omitempty" yaml:"kinds,omitempty"`
 }
 
 // Configuration file overrides the environment variables.
@@ -264,6 +270,21 @@ func initFromReaderConfigFile(reader io.Reader) error {
 	}
 	if configFileData.Verbosity != nil {
 		verbose = *configFileData.Verbosity
+	}
+	if configFileData.Outcomes != nil {
+		if err := venom.SetProtocolOutcomes(*configFileData.Outcomes); err != nil {
+			return errors.Wrap(err, ".venomrc outcomes")
+		}
+	}
+	var criticality, kinds []venom.ProblemLevel
+	if configFileData.Criticality != nil {
+		criticality = *configFileData.Criticality
+	}
+	if configFileData.Kinds != nil {
+		kinds = *configFileData.Kinds
+	}
+	if err := venom.SetProblemScales(criticality, kinds); err != nil {
+		return errors.Wrap(err, ".venomrc criticality, kinds")
 	}
 
 	return nil

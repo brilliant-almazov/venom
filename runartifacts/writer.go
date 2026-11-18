@@ -77,7 +77,7 @@ type row struct {
 	state   string
 	// fixer is the service to fix of a testcase that ended and did not pass (fixerOf).
 	fixer fixer
-	// outcome is ok, partial or failed of the protocol, failed until the testcase ends with one of its own.
+	// outcome is ok, partial, failed or not-run of the protocol, not-run until the testcase ends with one of its own.
 	outcome string
 	// points are the entries and exits of the processes its traces went through (tempo.Points).
 	points []tempo.Point

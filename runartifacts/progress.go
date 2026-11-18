@@ -8,14 +8,15 @@ import (
 // barCells is the width of a progress bar.
 const barCells = 20
 
-// barGlyphs are the cells of ok, partial and failed, in that order.
-var barGlyphs = []string{"█", "▒", "░"}
+// barGlyphs are the cells of ok, partial, failed and not-run, in that order.
+var barGlyphs = []string{"█", "▒", "░", "·"}
 
 // barNoRun is the bar of a block no run has: a scheme drawn with no run, of testcases no earlier run of the set has.
 const barNoRun = "no run"
 
-// progress is the progress bar of a block: 20 cells of ok, partial and failed shared by the largest remainder method,
-// a share that is not zero has a cell at least, then the ok share rounded half up: [████████████████▒▒░░] 80 %.
+// progress is the progress bar of a block: 20 cells of ok, partial, failed and not-run shared by the largest remainder
+// method, a share that is not zero has a cell at least, then the ok share rounded half up: [████████████████▒░··] 80 %;
+// a block with no testcase is all not-run.
 func progress(c count) string {
 	if c.all > 0 && c.unrun == c.all {
 		return barNoRun
@@ -23,14 +24,14 @@ func progress(c count) string {
 
 	var b strings.Builder
 
-	for i, n := range cellsOf([]int{c.ok, c.partial, c.notOK}, c.all) {
+	for i, n := range cellsOf([]int{c.ok, c.partial, c.notOK, c.notRun}, c.all) {
 		b.WriteString(strings.Repeat(barGlyphs[i], n))
 	}
 
 	cells := b.String()
 
 	if c.all == 0 {
-		cells = strings.Repeat(barGlyphs[2], barCells)
+		cells = strings.Repeat(barGlyphs[3], barCells)
 	}
 
 	return fmt.Sprintf("[%s] %d %%", cells, okShare(c))
@@ -99,7 +100,7 @@ func okShare(c count) int {
 	return (c.ok*200 + c.all) / (2 * c.all)
 }
 
-// stepCount is the count of the steps of a testcase, the denominator of its bar: ok passed, partial not run, failed.
+// stepCount is the count of the steps of a testcase, the denominator of its bar: ok passed, failed, not-run not run.
 func stepCount(r row) count {
 	var c count
 

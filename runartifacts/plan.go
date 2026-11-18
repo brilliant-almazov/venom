@@ -65,8 +65,8 @@ func lastRunOf(runs []pastRun, name string) (pastRun, bool) {
 	return pastRun{}, false
 }
 
-// takeRun puts on the row the testcase as the earlier run tells it: its verdict and code, the outcome of its protocol,
-// and its steps marked by the share of the run — the steps ok first, then the failed, then the not run, the order a
+// takeRun puts on the row the testcase as the earlier run tells it: its verdict and code, the outcome of its protocol —
+// not-run for a testcase that did not end —, and its steps marked by the share of the run — the steps ok first, then the failed, then the not run, the order a
 // run marks them in.
 func takeRun(r *row, c caseRun) {
 	r.view.Mark, r.view.Code = c.mark, c.code
@@ -76,16 +76,7 @@ func takeRun(r *row, c caseRun) {
 		r.state = stateDone
 	}
 
-	switch {
-	case c.ok == 100:
-		r.outcome = venom.ProtocolOutcomeOK
-
-	case c.ok > 0:
-		r.outcome = venom.ProtocolOutcomePartial
-
-	default:
-		r.outcome = venom.ProtocolOutcomeFailed
-	}
+	r.outcome = pastOutcome(c)
 
 	n := len(r.view.Steps)
 	ok, failed := (c.ok*n+50)/100, (c.failed*n+50)/100

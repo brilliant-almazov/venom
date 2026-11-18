@@ -117,8 +117,11 @@ hashids and the operation_id of a write, keyed on the trace of the call just bef
 `--protocol-dir <dir>` (env `VENOM_PROTOCOL_DIR`, `.venomrc` key `protocol_dir`) writes `<dir>/<testsuite>/<testcase>--<outcome>.md`
 for every testcase, whatever its outcome: passed, failed on a `Should…` assertion, failed on a `Must…` assertion, or
 skipped by `--stop-on-failure`. The outcome in the file name is `ok` for a passed testcase, `partial` for a failed one
-where some of its assertions held, `failed` for a failed one where none held; every protocol carries one of the three,
-a skipped testcase too: `partial` when some of its assertions held, `failed` otherwise (`protocol_outcome.go`). Sections:
+where some of its assertions held, `failed` for a failed one where none held, `not-run` for one that did not run or has
+not ended — skipped, interrupted, never started, pending —, never `failed` (`protocol_outcome.go`). The outcomes written
+in the names come from the base configuration `venomrc.base.yaml`, embedded in the binary, key `outcomes: [ok, partial,
+failed, not-run]`; a `.venomrc` key `outcomes` replaces the list, an outcome left out is not written (the protocol and
+its folder carry the name alone) and an outcome other than the four is an error (`TestProtocolOutcomesFromConfig`). Sections:
 
 - `## Expected behaviour`: the `happens`, `expect`, `right` and `norm` info lines;
 - `## What is wrong`: the `wrong` info lines;
@@ -605,9 +608,9 @@ or drawing by hand (package `runartifacts`):
 
 | Path | What |
 | -- | -- |
-| `<run>/protocols/<row id>-<outcome>-<testsuite>/<row id>-<outcome>-<rest>.md` | the protocol of section 10 for every testcase, whatever its outcome, named by the testcase name as written with its outcome `ok`, `partial` or `failed` of section 10 between the row id and the rest of the name (`SB-01-01-ok-POST-webhook-….md`; first, `ok-<name>.md`, for a name with no row id; `ProtocolOutcomeFile`), with a `## Links` section after its file line; every protocol carries one of the three: a testcase skipped is `failed`, or `partial` when some of its assertions held, and a testcase interrupted, not run or pending is `failed` (`ProtocolOutcomeName` with `ProtocolOutcomeFailed`); the protocol written as the testcase began is renamed when it ends, one file per testcase, and INDEX.md, the schemes, REPORT.md and PROBLEMS.md link the new name; the folder of the testsuite is named by the testsuite short name with its outcome the same way (`SB-01-01-ok-receive-webhook-ok/`; `ok-<name>/` with no row id): `ok` when every testcase of it ended `ok`, `partial` when one is `ok` or `partial`, `failed` otherwise; it moves as testcases end and the whole run folder is redrawn with the new links |
+| `<run>/protocols/<row id>-<outcome>-<testsuite>/<row id>-<outcome>-<rest>.md` | the protocol of section 10 for every testcase, whatever its outcome, named by the testcase name as written with its outcome `ok`, `partial`, `failed` or `not-run` of section 10 between the row id and the rest of the name (`SB-01-01-ok-POST-webhook-….md`; first, `ok-<name>.md`, for a name with no row id; `ProtocolOutcomeFile`), with a `## Links` section after its file line; every protocol carries one of the four: a testcase skipped, interrupted, not run or pending is `not-run`, never `failed` (`ProtocolOutcomeName` with `ProtocolOutcomeNotRun`); the protocol written as the testcase began is renamed when it ends, one file per testcase, and INDEX.md, the schemes, REPORT.md and PROBLEMS.md link the new name; the folder of the testsuite is named by the testsuite short name with its outcome the same way (`SB-01-01-ok-receive-webhook-ok/`; `ok-<name>/` with no row id): `ok` when every testcase of it ended `ok`, `partial` when one is `ok` or `partial`, `failed` when one failed, `not-run` otherwise; it moves as testcases end and the whole run folder is redrawn with the new links |
 | `<run>/protocols/traces/<trace_id>.md` | the span tree of every traced call of the run (section 13), secrets hidden |
-| `<run>/protocols/INDEX.md` | one row per testcase in testsuite file order: `suite`, `testcase`, `verdict` (✅/❌/⏸ and the answer code, or `⏸ interrupted`, `⏸ not run`, `⏸ pending`), `trace` (a link to the tree, `trace not saved <trace_id>`, or `—` for a call with no trace), `link` to the protocol, `scenario` (`<file>:<line>`), `scheme` of the case, `path` scheme; above the table every path and the system with a link to its scheme, its verdict and the share of the outcomes |
+| `<run>/protocols/INDEX.md` | one row per testcase in testsuite file order: `suite`, `testcase`, `verdict` (✅/❌/⏸ and the answer code, or `⏸ interrupted`, `⏸ not run`, `⏸ pending`), `trace` (a link to the tree, `trace not saved <trace_id>`, or `—` for a call with no trace), `link` to the protocol, `scenario` (`<file>:<line>`), `scheme` of the case, `path` scheme, `previous` (the testcase against the previous run, below); above the table every path and the system with a link to its scheme, its verdict and the share of the outcomes, then `- previous run:` with the counts of every outcome against the previous run |
 | `<run>/schemes/SYSTEM.md` | the scheme of the system: every path, every case of it and every transition of the case, drawn from the run; the paths; the checked cases; the system and each path carry the share of the outcomes |
 | `<run>/schemes/<path>/PATH.md` | the scheme of one path: its cases with their transitions, with the share of the outcomes; the checked cases |
 | `<run>/schemes/<path>/<testcase>.md` | the scheme of one case: its outcome and the share of its transitions ✅ / ❌ / ⏸ in %, its transitions drawn, the table of the transitions, how the case works |
@@ -616,7 +619,7 @@ or drawing by hand (package `runartifacts`):
 | `<run>/schemes/01-system.md` | every node the steps touch — an http or grpc host with its methods and paths, an sql database (driver and name, never the credentials) with its tables, any other executor with its calls — with its bar, red marked (`◄ red`); the processes the traces went through; the nodes; the edges in call order, from the node of a step to the node of the next step of the same testcase, `venom` first |
 | `<run>/schemes/02-paths/<path>.md` | the path with its bar and history, its processes, every testsuite of it with its bar, its testcases with the bar of their steps and the history of the testsuite |
 | `<run>/schemes/03-suites/<testsuite>.md` | the testsuite with its bar, history and processes, then every testcase: verdict, outcome, bar of its steps, scenario line, protocol, scheme, every trace id, its steps drawn — executor, method and url, database, the SQL text verbatim line by line, every assertion, the trace id, the reason of a step not ok — its processes, and the table of its steps |
-| `<run>/REPORT.md` | the verdict and the counts of the run, start and end, the reason a run ended early, every path, every testsuite with a link to its protocols folder and, for a red one, the services to fix (`fix in`), each linked to its fix file, every slice of the scheme — system, path, case — with its link, verdict and share, every trace id with its tree; the verdict line and every row of `## Paths` and `## Testsuites` carry the progress bar of the block, the row in its own `bar` column right after `verdict`; every count of testcases, in REPORT.md and the schemes, is followed by the share of the outcomes `ok N% · partial N% · failed N%` in whole % |
+| `<run>/REPORT.md` | the verdict and the counts of the run and `- previous run:` with the counts of every outcome against the previous run, `## Dynamics` with every testcase against the previous run (section «Dynamics against the previous run»), start and end, the reason a run ended early, every path, every testsuite with a link to its protocols folder and, for a red one, the services to fix (`fix in`), each linked to its fix file, every slice of the scheme — system, path, case — with its link, verdict and share, every trace id with its tree; the verdict line and every row of `## Paths` and `## Testsuites` carry the progress bar of the block, the row in its own `bar` column right after `verdict`; every count of testcases, in REPORT.md and the schemes, is followed by the share of the outcomes `ok N% · partial N% · failed N% · not-run N%` in whole % |
 | `<run>/PROBLEMS.md` | every testcase that did not pass — failed, skipped, interrupted, not run — with its first failed step, the reason, the scenario line, the protocol, the scheme, the trace and `fix in`, linked to its fix file: the service and the span of the deepest failed span of its traces — OTLP status error or a gRPC status code not OK (`tempo.Culprit`) — else `not established (<reason>)`: no trace id, no span tree saved, no span failed, the testcase did not end; the protocol of a testcase that did not pass carries the same line `fix in: <service> · <span>` above `## Links` |
 | `<run>/fixes/INDEX.md`, `<run>/fixes/<service>/INDEX.md`, `<run>/fixes/<service>/<NN>-<testcase>.md` | the fixes of the run, one folder per service to fix (`fix in`, named by its `service.name` as a slug) and one file per fix: a fix is one red testcase, or one cause shared by several — the same service and span to fix and the same reason of the first failed step — with the list of its testcases; the file says where (the service, the span of the failure, every trace id with a link to its span tree), what to do (per testcase: the failed step with its scenario line, the call, `expected` from the info lines happens / expect / right, `got` — the mark, the answer code and the reason — and the body the step answered, secrets hidden), why (the `norm` lines of each testcase with the scenario line of the testcase, `the scenario names no norm` without one) and the links to the protocols, the schemes, REPORT.md, PROBLEMS.md and the indexes; a testcase whose service is not established lies in `fixes/not-established/` with the reason; `fixes/INDEX.md` is every service with its count of fixes and testcases, `fixes/<service>/INDEX.md` every fix with its testcases, step and reason; the `fix in` cell of every red testcase of PROBLEMS.md and REPORT.md links its fix file, and a red testcase with no fix file refuses the write of both (`testcase <name> did not pass and has no fix file`) |
 | `<run>/raw/` | every other output of Venom: the reports, `venom.log`, dumps, `io.jsonl` (section 28), the traces fetched from Tempo; `--run-dir` replaces `--output-dir` |
@@ -640,10 +643,10 @@ section 10), `expected` (the info lines `happens`, `expect`, `right`, `norm`), `
 `scenario`, `protocol`, `scheme`, `trace`.
 
 **Progress bar.** One form for every block — run, path, testsuite, node, point of a process — and every executor:
-`[██████████████████▒░] 91 %`, 20 cells of ok █, partial ▒ and failed ░ (a testcase not ended counts failed) shared by
+`[██████████████████▒░] 91 %`, 20 cells of ok █, partial ▒, failed ░ and not-run · (a testcase not ended counts not-run, never failed) shared by
 the largest remainder method, ties to ok, then partial; a share that is not zero has a cell at least, taken from the
 share with the most cells; the number is the ok share rounded half up. The denominator is the testcases of the block;
-the bar of a testcase counts its steps: passed █, not run ▒, failed ░. A bar in a scheme is followed by the verdict
+the bar of a testcase counts its steps: passed █, failed ░, not run ·; a block with no testcase is all not-run ·. A bar in a scheme is followed by the verdict
 `❌ 80/88`.
 
 **Processes, entries and exits.** From the Tempo JSON of every saved span tree (`tempo.Points`): a process is the
@@ -731,6 +734,7 @@ step).
 | `⟦<case>:<hop>:reason⟧` | the first failure of that step, `—` when it passed, `not run` when it did not run |
 | `⟦*:<hop>⟧` | the hop over every testcase that has it: ✅ when all passed, else ❌, then passed/all |
 | `⟦<case>:protocol⟧` | a link to the protocol, relative to the scheme file |
+| `⟦<case>:previous⟧` | the case against the previous run, `failed → ok · improved · 2026-11/17-9`, `new`, `—` when the run does not have the case |
 | `⟦<case>:trace⟧` | a link to the span tree, `trace not saved <trace_id>`, or `—` |
 | `⟦<case>:bar⟧` | the progress bar of the case: of one testcase the bar of its steps and its verdict, `[████████████████████] 100 %  ✅ 201` |
 | `⟦<case> <case> …:bar⟧` | the progress bar of a node over the case ids it carries, apart by spaces or commas: the bar of their testcases and passed of all, `[██████████░░░░░░░░░░] 50 %  ❌ 1/2` |
@@ -739,7 +743,7 @@ The scheme is drawn at intake; venom draws none of its own then. When a set has 
 SYSTEM.md, PATH.md, case scheme or zoom set: it only copies the scheme folder to `<run>/schemes/` with its anchors and
 progress bars filled, after every testcase and when the run ends. A set with no scheme folder keeps the schemes drawn
 from the run above. A case the run does not have gives ⏸ (`not run` for a reason, `—` for a link); its bar counts it
-failed. Point tests:
+not-run. Point tests:
 `runartifacts/writer_test.go` (`TestRunFolder`, `TestSchemesOfTheCaseSet`), `runartifacts/outcomes_test.go`
 (`TestSchemeBarsAfterEveryTestcase` and `TestSchemeFromQA` in writer_test.go; `TestKilledRunLeavesInterrupted`, `TestAbortedRunNamesEveryTestcase`, `TestSetupFailureWritesTheRunFolder`,
 `TestSchemesDrawnFromTheRun`, `TestNoEmptyFolders`), `runartifacts/run_test.go` (`TestRunOfEveryOutcome`: a whole run
@@ -762,3 +766,73 @@ docker build -f docker/Dockerfile.cgw-qa -t cgw-qa-venom:<sha> \
 
 The final stage is `alpine:3.21` (the base of `ovhcom/venom:v1.3.0`) plus `docker-cli`.
 CI: `.github/workflows/cgw-qa.yml`, `runs-on: self-hosted`.
+
+## Dynamics against the previous run
+
+Every testcase carries its state against the previous run of the set that has it — the last earlier run folder
+`<runs>/<YYYY-MM>/<DD-n>` with a REPORT.md naming the testcase: `<previous outcome> → <current outcome> · <dynamics> ·
+<run>`, the dynamics `improved`, `worse` or `same` by the rank of the outcomes ok, partial, failed, not-run;
+`<previous> → pending · <run>` while the testcase has not started; `new` when no earlier run has it.
+
+| Where | What |
+| -- | -- |
+| REPORT.md | `- previous run: <run> · ok a → b (+d) · partial … · failed … · not-run …` under the counts (`none` with no earlier run); `## Dynamics`: `testcase`, `previous run`, `previous`, `current`, `dynamics` per testcase |
+| protocols/INDEX.md | the same `- previous run:` line above the table, the column `previous` |
+| every protocol | `- previous: …` in `## Links` |
+| case scheme, testsuite zoom | `- previous: …` |
+| live scheme | the anchor `⟦<case>:previous⟧` |
+
+The previous outcome is the `current` column of `## Dynamics` of the earlier REPORT.md; a REPORT.md written before it
+gives the outcome from the verdict and the step share of its `## Schemes` case row. Point tests:
+`runartifacts/dynamics_test.go` (`TestDynamicsAgainstThePreviousRun`, `TestDynamicsVerdict`).
+
+## Zone of fix responsibility in every file
+
+Every testcase names who fixes it, `fix in`, in every file of the run folder, the passed ones too:
+
+| Value | When |
+| -- | -- |
+| `<service> · <span> — the deepest failed span of trace <trace_id>` | the deepest failed span of its traces (`tempo.Culprit`) |
+| `not established (<reason>)` | no trace id, no span tree saved, no span failed, the testcase did not end |
+| `— (nothing to fix: the testcase passed)` | the testcase passed |
+
+A testcase that did not pass links the value to its fix file `fixes/<service>/<NN>-<testcase>.md`.
+
+| Where | What |
+| -- | -- |
+| REPORT.md | `## Fix responsibility`: `testcase`, `verdict`, `fix in` for every testcase; the `fix in` column of `## Testsuites`, each fix file once |
+| protocols/INDEX.md | the column `fix in` |
+| PROBLEMS.md | the column `fix in` |
+| every protocol | the line `fix in: …` above `## Links` |
+| case scheme, testsuite zoom | `- fix in: …` |
+| live scheme | the anchor `⟦<case>:fix⟧` |
+
+Point test: `runartifacts/dynamics_test.go` (`TestFixInEveryFile`).
+
+## Problems by priority
+
+Every testcase that did not pass is a problem with an index the same in every run, `P-<testcase name as a file name>`
+(`P-SB-03-01-02-row`), the kind of its scenario and its criticality. A testcase declares both by its info lines:
+
+```yaml
+info:
+  - "kind: business"
+  - "criticality: critical"
+```
+
+The kinds and the criticality scale, each from the first to fix with what each level means, come from the base
+configuration `venomrc.base.yaml`, keys `kinds` (`business`, `technical`, `qa`) and `criticality` (`critical`,
+`important`, `tolerable`), each level `{name, means}`; a `.venomrc` key `kinds` or `criticality` replaces the list, a
+level with no name is an error. A testcase that declares none is `not set`; a level the scale does not have is
+`<name> (not in the scale)`; both go after every level.
+
+PROBLEMS.md lists the problems by priority — by kind, then by criticality, testcase order on a tie — with the columns
+`problem`, `kind`, `criticality` first; REPORT.md carries the same order in `## Problems by priority` (`problem`,
+`testcase`, `kind`, `criticality`, `verdict`, `fix in`); the protocol of a testcase that did not pass carries the line
+`problem: <index> · kind: <kind (means)> · criticality: <level (means)>` above `fix in`.
+
+When the deepest failed spans of the traces of a testcase lie in more than one service, `fix in` is
+`both: <service> + <service> · <span> + <span> — the deepest failed span of each trace of the testcase`.
+
+Point tests: `problem_scale_test.go` (`TestProblemScalesFromConfig`), `runartifacts/priority_test.go`
+(`TestProblemsByPriority`, `TestFixBoth`).

@@ -40,6 +40,7 @@ func ProtocolOf(ctx context.Context, ts *TestSuite, tc *TestCase) ProtocolView {
 		view.CallStep = protocolStepNumber(call, n)
 	}
 	info := protocolInfo(tc)
+	view.Criticality, view.Kind = declaredLevel(info, infoCriticality), declaredLevel(info, infoKind)
 	for _, k := range expectedKeys {
 		for _, val := range info[k] {
 			view.Expected = append(view.Expected, k+": "+val)
@@ -124,6 +125,8 @@ func protocolStepReason(r *TestStepResult) string {
 func PlannedView(ts *TestSuite, tc *TestCase) ProtocolView {
 	view := ProtocolView{Name: CaseName(tc), Suite: ts.Name, File: ts.Filepath, Line: tc.SourceLine, Mark: MarkNotRun,
 		Trees: map[string]string{}, Hops: map[string]HopView{}}
+	info := protocolInfo(tc)
+	view.Criticality, view.Kind = declaredLevel(info, infoCriticality), declaredLevel(info, infoKind)
 	for i := range tc.RawTestSteps {
 		view.Steps = append(view.Steps, plannedStep(tc, i))
 	}

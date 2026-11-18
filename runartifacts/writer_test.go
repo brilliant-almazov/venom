@@ -147,9 +147,9 @@ func TestSchemeBarsAfterEveryTestcase(t *testing.T) {
 
 	body, err := os.ReadFile(filepath.Join(run, SchemesDir, "SYSTEM.md"))
 	require.NoError(t, err)
-	assert.Equal(t, "billing [██████████░░░░░░░░░░] 50 %  ⏸ 1/2\n"+
+	assert.Equal(t, "billing [██████████··········] 50 %  ⏸ 1/2\n"+
 		"├─ BL-01-01 [████████████████████] 100 %  ✅ 201\n"+
-		"└─ BL-01-02 [░░░░░░░░░░░░░░░░░░░░] 0 %  ⏸ pending\n", string(body))
+		"└─ BL-01-02 [····················] 0 %  ⏸ pending\n", string(body))
 
 	w.Testcase(ctx, ts, &ts.TestCases[1])
 	require.NoError(t, w.Finish(ctx, &venom.Tests{}))
@@ -225,7 +225,7 @@ func TestLiveSchemeNextToRuns(t *testing.T) {
 	w.Plan(&venom.Tests{TestSuites: []venom.TestSuite{*ts}})
 	w.Testcase(ctx, ts, &ts.TestCases[0])
 
-	assert.Equal(t, "gateway ⟦SB-01 SB-02:bar⟧⟪[██████████░░░░░░░░░░] 50 %  ⏸ 1/2⟫\n├─ ⟦SB-01⟧⟪✅ 200⟫\n└─ ⟦SB-02⟧⟪⏸⟫\n",
+	assert.Equal(t, "gateway ⟦SB-01 SB-02:bar⟧⟪[██████████··········] 50 %  ⏸ 1/2⟫\n├─ ⟦SB-01⟧⟪✅ 200⟫\n└─ ⟦SB-02⟧⟪⏸⟫\n",
 		read(live))
 
 	w.Testcase(ctx, ts, &ts.TestCases[1])
@@ -388,10 +388,10 @@ func TestReportNamesServiceToFix(t *testing.T) {
 		return string(body)
 	}
 
-	const billing = "svc-billing · billing.v1.Accounts/Create"
+	const billing = "svc-billing · billing.v1.Accounts/Create — the deepest failed span of trace " + traceOK
 	const unknown = "not established (the call returned no trace id)"
-	assert.Contains(t, read("protocols/SB-03-01-failed-accounts/SB-03-01-01-failed-create.md"), "\n\nfix in: "+billing+"\n\n## Links")
-	assert.Contains(t, read("protocols/SB-03-01-failed-accounts/SB-03-01-02-failed-monolith.md"), "\n\nfix in: "+unknown+"\n\n## Links")
+	assert.Contains(t, read("protocols/SB-03-01-failed-accounts/SB-03-01-01-failed-create.md"), "\n\nfix in: [" + billing + "](../../fixes/svc-billing/01-SB-03-01-01-create.md)\n\n## Links")
+	assert.Contains(t, read("protocols/SB-03-01-failed-accounts/SB-03-01-02-failed-monolith.md"), "\n\nfix in: [" + unknown + "](../../fixes/not-established/01-SB-03-01-02-monolith.md)\n\n## Links")
 
 	const billingFix = "[" + billing + "](fixes/svc-billing/01-SB-03-01-01-create.md)"
 	const unknownFix = "[" + unknown + "](fixes/not-established/01-SB-03-01-02-monolith.md)"

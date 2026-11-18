@@ -9,9 +9,9 @@ import (
 	"github.com/ovh/venom"
 )
 
-// rowOf is the row of testcase index of ts, made on first sight; its protocol is named failed until the testcase ends
-// with an outcome of its own, so a testcase interrupted, not run or pending carries the outcome too; it lies in the
-// folder of its testsuite named by the outcome of the testsuite (suiteDir).
+// rowOf is the row of testcase index of ts, made on first sight; its protocol is named not-run until the testcase ends
+// with an outcome of its own, so a testcase interrupted, not run or pending carries the outcome not-run, never failed;
+// it lies in the folder of its testsuite named by the outcome of the testsuite (suiteDir).
 func (w *Writer) rowOf(ts *venom.TestSuite, index int) *row {
 	key := fmt.Sprintf("%s\x00%d", ts.Filepath, index)
 	if r, ok := w.rows[key]; ok {
@@ -29,18 +29,18 @@ func (w *Writer) rowOf(ts *venom.TestSuite, index int) *row {
 	}
 
 	r := &row{suite: ts.Name, suiteShort: ts.ShortName, suiteFile: ts.Filepath, absFile: abs, testcase: name,
-		index: index, trees: map[string]string{}, state: statePending, outcome: venom.ProtocolOutcomeFailed}
-	r.protocol = filepath.Join(w.folderOf(r.suiteShort), venom.ProtocolOutcomeName(name, venom.ProtocolOutcomeFailed)+".md")
+		index: index, trees: map[string]string{}, state: statePending, outcome: venom.ProtocolOutcomeNotRun}
+	r.protocol = filepath.Join(w.folderOf(r.suiteShort), venom.ProtocolOutcomeName(name, venom.ProtocolOutcomeNotRun)+".md")
 	w.rows[key] = r
 
 	return r
 }
 
 // suiteDir is the folder protocols/<row id>-<outcome>-<rest> of the testsuite short: ok when every testcase of it
-// ended ok, partial when some testcase is ok or partial, failed otherwise — a testcase that did not end is failed
-// (the outcome belongs in the folder name too).
+// ended ok, partial when some testcase is ok or partial, failed when some testcase failed, not-run otherwise — a
+// testcase that did not end is not-run, never failed (the outcome belongs in the folder name too).
 func (w *Writer) suiteDir(short string) string {
-	all, some, seen := true, false, false
+	all, some, fail, seen := true, false, false, false
 
 	for _, r := range w.rows {
 		if r.suiteShort != short {
@@ -50,22 +50,25 @@ func (w *Writer) suiteDir(short string) string {
 		seen = true
 		all = all && r.outcome == venom.ProtocolOutcomeOK
 		some = some || r.outcome == venom.ProtocolOutcomeOK || r.outcome == venom.ProtocolOutcomePartial
+		fail = fail || r.outcome == venom.ProtocolOutcomeFailed
 	}
 
-	o := venom.ProtocolOutcomeFailed
+	o := venom.ProtocolOutcomeNotRun
 
 	switch {
 	case seen && all:
 		o = venom.ProtocolOutcomeOK
 	case some:
 		o = venom.ProtocolOutcomePartial
+	case fail:
+		o = venom.ProtocolOutcomeFailed
 	}
 
 	return filepath.Join(w.dir, ProtocolsDir, venom.ProtocolOutcomeName(short, o))
 }
 
 // folderOf is the folder the testsuite short lies in now: that of a row of it already seen, else the folder of a
-// testsuite whose testcases did not end, failed.
+// testsuite whose testcases did not end, not-run.
 func (w *Writer) folderOf(short string) string {
 	for _, r := range w.rows {
 		if r.suiteShort == short {
@@ -73,7 +76,7 @@ func (w *Writer) folderOf(short string) string {
 		}
 	}
 
-	return filepath.Join(w.dir, ProtocolsDir, venom.ProtocolOutcomeName(short, venom.ProtocolOutcomeFailed))
+	return filepath.Join(w.dir, ProtocolsDir, venom.ProtocolOutcomeName(short, venom.ProtocolOutcomeNotRun))
 }
 
 // moveSuite moves the folder of the testsuite of r to the name of its outcome, every protocol of the testsuite with it;

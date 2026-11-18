@@ -10,7 +10,7 @@ import (
 )
 
 // anchor is a mark of a scheme template: ⟦<case>⟧, ⟦<case>:<hop>⟧, ⟦<case>:<hop>:reason⟧, ⟦*:<hop>⟧,
-// ⟦<case>:protocol⟧, ⟦<case>:trace⟧; in the live scheme next to the runs it is followed by the value of the last
+// ⟦<case>:protocol⟧, ⟦<case>:trace⟧, ⟦<case>:previous⟧, ⟦<case>:fix⟧; in the live scheme next to the runs it is followed by the value of the last
 // fill, ⟦<case>:bar⟧⟪[████] 100 %  ✅ 200⟫, which the next fill replaces.
 var anchor = regexp.MustCompile(`⟦([^⟦⟧]+)⟧(?:⟪[^⟪⟫]*⟫)?`)
 
@@ -25,6 +25,8 @@ const (
 	wordTrace   = "trace"
 	wordNotRun  = "not run"
 	wordBar     = "bar"
+	wordPrev    = "previous"
+	wordFix     = "fix"
 	noValue     = "—"
 	caseIDBound = " -_:·."
 )
@@ -35,6 +37,8 @@ type fill struct {
 	rows []row
 	from string
 	live bool
+	// past are the earlier runs of the set, the previous state of a case (dynamics.go).
+	past []pastRun
 }
 
 func (f fill) text(s string) string {
@@ -69,6 +73,12 @@ func (f fill) value(parts []string) string {
 
 	case len(parts) == 2 && parts[1] == wordBar:
 		return f.barValue(parts[0])
+
+	case len(parts) == 2 && parts[1] == wordPrev:
+		return f.previousValue(r)
+
+	case len(parts) == 2 && parts[1] == wordFix:
+		return f.fixValue(r)
 
 	case len(parts) == 3 && parts[2] == wordReason:
 		return f.reasonValue(r, parts[1])
@@ -165,6 +175,25 @@ func (f fill) reasonValue(r *row, hop string) string {
 	default:
 		return h.Reason
 	}
+}
+
+// previousValue is the case against the previous run of the set that has it (dynamicsOf), «—» of a case the run does
+// not have.
+func (f fill) previousValue(r *row) string {
+	if r == nil {
+		return noValue
+	}
+
+	return layout{past: f.past}.dynamicsOf(*r)
+}
+
+// fixValue is the zone of fix responsibility of the case in full (fixDetail), «—» of a case the run does not have.
+func (f fill) fixValue(r *row) string {
+	if r == nil {
+		return noValue
+	}
+
+	return fixDetail(*r)
 }
 
 func (f fill) protocolValue(r *row) string {
