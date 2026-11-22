@@ -118,9 +118,16 @@ func (v *Venom) runTestCases(ctx context.Context, ts *TestSuite) {
 
 	for i := range ts.TestCases {
 		tc := &ts.TestCases[i]
+		if v.env.isDirty() {
+			markRemainingSkipped(ts, envDirtyReason)
+			for j := i; j < len(ts.TestCases); j++ {
+				v.writeProtocol(ctx, ts, &ts.TestCases[j])
+			}
+			return
+		}
 		stop, export := v.runOneTestCase(ctx, ts, tc)
 		if stop {
-			markRemainingSkipped(ts)
+			markRemainingSkipped(ts, stopOnFailureReason)
 			for j := i + 1; j < len(ts.TestCases); j++ {
 				v.writeProtocol(ctx, ts, &ts.TestCases[j])
 			}
@@ -132,14 +139,17 @@ func (v *Venom) runTestCases(ctx context.Context, ts *TestSuite) {
 	}
 }
 
-// markRemainingSkipped implements --stop-on-failure: every testcase not run yet is skipped.
-func markRemainingSkipped(ts *TestSuite) {
+// stopOnFailureReason is why the testcases after a failure do not run with --stop-on-failure.
+const stopOnFailureReason = "===== stop-on-failure: enabled ====="
+
+// markRemainingSkipped skips every testcase not run yet, for reason: --stop-on-failure or a base state not restored.
+func markRemainingSkipped(ts *TestSuite, reason string) {
 	for i := range ts.TestCases {
 		tc := &ts.TestCases[i]
 		if tc.Status == "" {
 			tc.Status = StatusSkip
 			tc.IsEvaluated = true
-			tc.Skipped = append(tc.Skipped, Skipped{Value: "===== stop-on-failure: enabled ====="})
+			tc.Skipped = append(tc.Skipped, Skipped{Value: reason})
 		}
 	}
 }
@@ -165,7 +175,9 @@ func (v *Venom) runOneTestCase(ctx context.Context, ts *TestSuite, tc *TestCase)
 			v.Print("\n")
 		}
 		// ##### RUN Test Case Here
-		v.runTestCase(ctx, ts, tc)
+		caseCtx, resets := v.beginEnvResets(ctx)
+		v.runTestCase(caseCtx, ts, tc)
+		v.restoreEnv(caseCtx, tc, resets)
 		tc.End = time.Now()
 		tc.Duration = tc.End.Sub(tc.Start).Seconds()
 	}

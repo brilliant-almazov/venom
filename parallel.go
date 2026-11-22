@@ -15,11 +15,11 @@ var pluginMu sync.Mutex
 // parallelFor returns how many testcases of ts may run at once.
 //
 // The suite runs sequentially (1) when Parallel <= 1, when --stop-on-failure is set,
-// when it has a single testcase, or when a testcase references a var exported by an
-// earlier testcase of the same suite: a template "{{.<earlier testcase name>.<var>}}"
-// found in its steps or skip conditions.
+// when it has a single testcase, when a testcase holds an env_set step, or when a testcase
+// references a var exported by an earlier testcase of the same suite: a template
+// "{{.<earlier testcase name>.<var>}}" found in its steps or skip conditions.
 func (v *Venom) parallelFor(ts *TestSuite) int {
-	if v.Parallel <= 1 || v.StopOnFailure || len(ts.TestCases) < 2 {
+	if v.Parallel <= 1 || v.StopOnFailure || len(ts.TestCases) < 2 || usesEnvSet(ts) {
 		return 1
 	}
 	if dependsOnEarlierTestCase(ts) {
@@ -113,15 +113,15 @@ func (v *Venom) runTimedTestSuite(ctx context.Context, ts *TestSuite) error {
 // parallelSuitesFor returns how many testsuites of the run may go at once.
 //
 // The run is sequential (1) when ParallelSuites <= 1, when --stop-on-failure is set,
-// with -vvv (CPU profiling is process-wide), with a single testsuite, or when a
-// testsuite references a var named after a testcase of another testsuite
-// ("{{.<testcase name>.<var>}}").
+// with -vvv (CPU profiling is process-wide), with a single testsuite, when a testsuite
+// holds an env_set step, or when a testsuite references a var named after a testcase of
+// another testsuite ("{{.<testcase name>.<var>}}").
 func (v *Venom) parallelSuitesFor() int {
 	suites := v.Tests.TestSuites
 	if v.ParallelSuites <= 1 || v.StopOnFailure || v.Verbose >= 3 || len(suites) < 2 {
 		return 1
 	}
-	if suitesShareVars(suites) {
+	if suitesShareVars(suites) || suitesUseEnvSet(suites) {
 		return 1
 	}
 	if v.ParallelSuites > len(suites) {

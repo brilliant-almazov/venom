@@ -749,6 +749,65 @@ not-run. Point tests:
 `TestSchemesDrawnFromTheRun`, `TestNoEmptyFolders`), `runartifacts/run_test.go` (`TestRunOfEveryOutcome`: a whole run
 of pass, Should, Must and skip), `TestUserExecutorCallKeptOnFailure`, `TestProtocolDBReadsInPlaceOfTrace`.
 
+## 32. Chosen testcases of chosen testsuites: `--testcase <name>`
+
+A run names only what it runs: a testsuite, several testsuites, or testcases.
+
+```bash
+venom run cases/billing/plans.yml                                   # one testsuite
+venom run cases/billing/plans.yml cases/billing/invoices.yml        # several
+venom run cases/billing/ --testcase "BIL-12 plan upgrade"           # one testcase
+venom run cases/billing/ --testcase BIL-12-plan-upgrade --testcase "BIL-14 refund"
+```
+
+| rule | |
+| -- | -- |
+| name | the `name:` of the testcase as written, or its slug |
+| brought along | the `setup…` and `teardown…` testcases of its testsuite, every earlier testcase whose vars it reads (`{{.<testcase>.<var>}}`), transitively; a testsuite under `scenarios/preflight/` whole |
+| other testsuites | a testsuite holding none of the names does not run |
+| unknown name | exit 2: `--testcase "<name>": no such testcase in <testsuite files>` |
+
+Point tests: `select_test.go`.
+
+## 33. A testcase that changes the ENV of a service: `type: env_set`, reset whatever the outcome
+
+```yaml
+- name: BIL-21 crawler batch of five
+  steps:
+  - type: env_set
+    service: svc-crawler
+    values:
+      CRAWLER_BATCH: "5"
+  - type: grpc
+    ...
+```
+
+| field | type | default | |
+| -- | -- | -- | -- |
+| `service` | string | — | required, the stand service |
+| `values` | map | — | required, `KEY: value`, passed sorted by key |
+| `env` | string | the var `stand` | the stand, passed as `--env <env>` |
+| `bin` | string | `bin/cli` | the utility, relative to the testsuite workdir; started directly, never through a shell |
+
+The step runs `bin/cli var set <service> KEY=value… --restart --env <env>`: the utility restarts the service and returns
+once it is healthy, rc 0, or not, rc 10. Result as `type: cli`: `result.code` (default assertion
+`result.code ShouldEqual 0`), `result.systemout`, `result.systemerr`.
+
+Before the call the step registers `bin/cli var reset <service> --restart --env <env>` on its testcase, once per
+service. When the testcase ends, passed, failed, its step in error or canceled, Venom runs every reset, the last
+registered first, each as a step `env reset <service>` after the steps of the scenario. On SIGINT or SIGTERM Venom runs
+the resets of the testcases still running before it exits, and prints `base state not restored: <service>: <why>` for
+each that failed. A suite writes no reset step of its own.
+
+| reset | effect |
+| -- | -- |
+| rc 0 | the step `env reset <service>` passes |
+| rc ≠ 0 | it fails with `base state not restored: <service>: rc=<code>`, the testcase fails, every testcase after it in the run is skipped with `===== base state not restored: the run stopped =====` |
+
+A testsuite holding an `env_set` step runs its testcases in order (`--parallel` ignored) and runs alone
+(`--parallel-suites` ignored): the restarted service is shared. Point tests: `env_reset_test.go`,
+`executors/cli/env_set_test.go`.
+
 ## Build
 
 ```bash

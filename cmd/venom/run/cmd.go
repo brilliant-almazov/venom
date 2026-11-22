@@ -34,6 +34,7 @@ var (
 	libDir         string
 	protocolDir    string
 	runDir         string
+	testCaseNames  []string
 	htmlReport     bool
 	stopOnFailure  bool
 	dryRun         bool
@@ -48,6 +49,7 @@ var (
 	libDirFlag         *string
 	protocolDirFlag    *string
 	runDirFlag         *string
+	testCaseNamesFlag  *[]string
 	stopOnFailureFlag  *bool
 	dryRunFlag         *bool
 	parallelFlag       *int
@@ -74,6 +76,9 @@ func init() {
 	verboseFlag = Cmd.Flags().CountP("verbose", "v", "verbose. -v (INFO level in venom.log file), -vv to very verbose (DEBUG level) and -vvv to very verbose with CPU Profiling")
 	varFilesFlag = Cmd.Flags().StringSlice("var-from-file", []string{""}, "--var-from-file filename.yaml --var-from-file filename2.yaml: yaml, must contains a dictionary")
 	variablesFlag = Cmd.Flags().StringArray("var", nil, "--var cds='cds -f config.json' --var cds2='cds -f config.json'")
+	testCaseNamesFlag = Cmd.Flags().StringArray("testcase", nil, "--testcase <name>: run only this testcase of the testsuites given, by its name; "+
+		"repeat the flag for several. The setup… and teardown… testcases of its testsuite and every earlier testcase whose vars it reads run too; "+
+		"a testsuite holding none of the names does not run. A name matching no testcase exits 2")
 	outputDirFlag = Cmd.PersistentFlags().String("output-dir", "", "Output Directory: create tests results file inside this directory")
 	libDirFlag = Cmd.PersistentFlags().String("lib-dir", "", "Lib Directory: can contain user executors. example:/etc/venom/lib:$HOME/venom.d/lib")
 	protocolDirFlag = Cmd.PersistentFlags().String("protocol-dir", "", "Protocol Directory: one <testsuite>/<testcase>.md per testcase, whatever its outcome — expected and wrong behaviour from the info lines, the last call, its span tree, the verdict with every failed assertion. Env: VENOM_PROTOCOL_DIR")
@@ -158,6 +163,10 @@ func initFromCommandArguments(f *pflag.Flag) {
 			for _, varFlag := range *variablesFlag {
 				variables = mergeVariables(varFlag, variables)
 			}
+		}
+	case "testcase":
+		if testCaseNamesFlag != nil {
+			testCaseNames = *testCaseNamesFlag
 		}
 	}
 }
@@ -332,28 +341,28 @@ func initFromEnv(environ []string) ([]string, error) {
 		var err error
 		parallel, err = strconv.Atoi(os.Getenv("VENOM_PARALLEL"))
 		if err != nil {
-			return nil, fmt.Errorf("invalid value for VENOM_PARALLEL")
+			return nil, fmt.Errorf("invalid value for VENOM_PARALLEL: %w", err)
 		}
 	}
 	if os.Getenv("VENOM_PARALLEL_SUITES") != "" {
 		var err error
 		parallelSuites, err = strconv.Atoi(os.Getenv("VENOM_PARALLEL_SUITES"))
 		if err != nil {
-			return nil, fmt.Errorf("invalid value for VENOM_PARALLEL_SUITES")
+			return nil, fmt.Errorf("invalid value for VENOM_PARALLEL_SUITES: %w", err)
 		}
 	}
 	if os.Getenv("VENOM_STOP_ON_FAILURE") != "" {
 		var err error
 		stopOnFailure, err = strconv.ParseBool(os.Getenv("VENOM_STOP_ON_FAILURE"))
 		if err != nil {
-			return nil, fmt.Errorf("invalid value for VENOM_STOP_ON_FAILURE")
+			return nil, fmt.Errorf("invalid value for VENOM_STOP_ON_FAILURE: %w", err)
 		}
 	}
 	if os.Getenv("VENOM_HTML_REPORT") != "" {
 		var err error
 		htmlReport, err = strconv.ParseBool(os.Getenv("VENOM_HTML_REPORT"))
 		if err != nil {
-			return nil, fmt.Errorf("invalid value for VENOM_HTML_REPORT")
+			return nil, fmt.Errorf("invalid value for VENOM_HTML_REPORT: %w", err)
 		}
 	}
 	if os.Getenv("VENOM_LIB_DIR") != "" {
@@ -368,7 +377,7 @@ func initFromEnv(environ []string) ([]string, error) {
 	if os.Getenv("VENOM_VERBOSE") != "" {
 		v, err := strconv.ParseInt(os.Getenv("VENOM_VERBOSE"), 10, 64)
 		if err != nil {
-			return nil, fmt.Errorf("invalid value for VENOM_VERBOSE, must be 1, 2 or 3")
+			return nil, fmt.Errorf("invalid value for VENOM_VERBOSE, must be 1, 2 or 3: %w", err)
 		}
 		v2 := int(v)
 		verbose = v2
@@ -434,13 +443,14 @@ var Cmd = &cobra.Command{
 			v.Artifacts = artifacts
 			v.OutputDir = artifacts.RawPath()
 		}
-		folder := runFolder{writer: artifacts}
+		folder := artifactsFolder{writer: artifacts, v: v}
 		defer folder.onCrash()
 		folder.onSignal()
 		v.LibDir = libDir
 		v.OutputFormat = format
 		v.StopOnFailure = stopOnFailure
 		v.DryRun = dryRun
+		v.TestCaseNames = testCaseNames
 		v.Parallel = parallel
 		v.ParallelSuites = parallelSuites
 		v.HtmlReport = htmlReport
@@ -473,15 +483,16 @@ var Cmd = &cobra.Command{
 			displayArg(context.Background())
 		}
 
-		readers := []io.Reader{}
+		var readers []io.Reader
 		for _, f := range varFiles {
 			if f == "" {
 				continue
 			}
 			fi, err := os.Open(f)
 			if err != nil {
-				folder.fail("setup failed", fmt.Errorf("unable to open var-from-file %s: %v", f, err))
-				return nil
+				err = fmt.Errorf("unable to open var-from-file %s: %w", f, err)
+				folder.fail("setup failed", err)
+				return err
 			}
 			defer fi.Close()
 			readers = append(readers, fi)
@@ -490,7 +501,7 @@ var Cmd = &cobra.Command{
 		mapvars, err := readInitialVariables(context.Background(), variables, readers, os.Environ())
 		if err != nil {
 			folder.fail("setup failed", err)
-			return nil
+			return err
 		}
 		v.AddVariables(mapvars)
 
@@ -500,7 +511,7 @@ var Cmd = &cobra.Command{
 		}
 		if err != nil {
 			folder.fail("setup failed", err)
-			return nil
+			return err
 		}
 
 		if v.DryRun {

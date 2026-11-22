@@ -38,6 +38,7 @@ var Registry map[string]Constructor = map[string]Constructor{
 	cli.Name:            cli.New,
 	cli.SeedName:        cli.NewSeed,
 	cli.StandStatusName: cli.NewStandStatus,
+	cli.EnvSetName:      cli.NewEnvSet,
 	dbfixtures.Name:     dbfixtures.New,
 	exec.Name:           exec.New,
 	grpc.Name:           grpc.New,

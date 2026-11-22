@@ -50,6 +50,7 @@ func New() *Venom {
 		variables:        map[string]interface{}{},
 		secrets:          map[string]interface{}{},
 		OutputFormat:     "xml",
+		env:              &envState{},
 	}
 	return v
 }
@@ -84,6 +85,11 @@ type Venom struct {
 	DryRun bool
 	// AsWritten reads the testsuites with no var filled, each {{.x}} kept as the scenario writes it (plan.go).
 	AsWritten bool
+	// TestCaseNames, when set, keeps only these testcases of the testsuites read, with what they need (select.go).
+	TestCaseNames []string
+	// env is the resets of the testcases running now and whether one failed (env_state.go); a pointer, so the copies
+	// a parallel run makes share it.
+	env *envState
 }
 
 var trace = color.New(color.Attribute(90)).SprintFunc()
@@ -165,10 +171,10 @@ func (v *Venom) GetExecutorRunner(ctx context.Context, ts TestStep, h H) (contex
 	info, _ := ts.StringSliceValue("info")
 	vars, err := DumpStringPreserveCase(h)
 	if err != nil {
-		return ctx, nil, err
+		return nil, nil, err
 	}
 
-	allKeys := []string{}
+	var allKeys []string
 	for k, v := range vars {
 		ctx = context.WithValue(ctx, ContextKey("var."+k), v)
 		allKeys = append(allKeys, k)
@@ -215,15 +221,18 @@ type userExecutorFile struct {
 func (v *Venom) getUserExecutorFilesPath(ctx context.Context) []userExecutorFile {
 	var libpaths []string
 	seen := make(map[string]struct{})
+	var addAbs func(abs string)
 	add := func(p string) {
 		p = strings.TrimSpace(p)
 		if p == "" {
 			return
 		}
-		abs, err := filepath.Abs(p)
-		if err != nil {
-			return
+		abs, absErr := filepath.Abs(p)
+		if absErr == nil && abs != "" {
+			addAbs(abs)
 		}
+	}
+	addAbs = func(abs string) {
 		if real, err := filepath.EvalSymlinks(abs); err == nil {
 			abs = real
 		}
@@ -414,9 +423,9 @@ func (v *Venom) registerPlugin(ctx context.Context, name string, vars map[string
 	if err != nil {
 		// try to load from venom binary path
 		p, err = plugin.Open(path.Join("lib", name+".so"))
-		if err != nil {
-			return fmt.Errorf("unable to load plugin %q.so", name)
-		}
+	}
+	if err != nil {
+		return fmt.Errorf("unable to load plugin %q.so: %w", name, err)
 	}
 
 	symbolExecutor, err := p.Lookup("Plugin")

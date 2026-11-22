@@ -1,5 +1,5 @@
-// Package cli runs the stand utility from declared fields with no script text, and exposes that as the `cli`, `seed`
-// and `stand_status` executors (owner 2026-11-15: scenarios are declarative only).
+// Package cli runs the stand utility from declared fields with no script text, and exposes that as the `cli`, `seed`,
+// `stand_status` and `env_set` executors (owner 2026-11-15: scenarios are declarative only).
 //
 // The utility is started directly, never through a shell: argv is the words of `action`, then `args`, then
 // `--env <env>`. `seed` is the action seed with `--block <block>`, `stand_status` the action status; both take the
@@ -37,6 +37,9 @@ const (
 
 // DefaultBin is the stand utility when the step gives no bin, relative to the testsuite workdir.
 const DefaultBin = "bin/cli"
+
+// workdirVar is the var holding the testsuite workdir, where the utility starts.
+const workdirVar = "venom.testsuite.workdir"
 
 // New returns the cli executor.
 func New() venom.Executor {
@@ -134,15 +137,32 @@ func (x Executor) Run(ctx context.Context, step venom.TestStep) (interface{}, er
 	if bin == "" {
 		bin = DefaultBin
 	}
+	r, err := run(ctx, bin, argv)
+	if err != nil {
+		return nil, err
+	}
+	if e.fixed == "" && strings.Fields(e.Action)[0] == healthAction {
+		red := Red(r.Systemout + "\n" + r.Systemerr)
+		r.Red, r.RedNew = strings.Join(red, "\n"), strings.Join(RedNew(red, e.Baseline), "\n")
+	}
+	if r.OutputFile, err = evidence.Write(ctx, e.OutputFile, r.Systemout+r.Systemerr); err != nil {
+		return nil, err
+	}
+	return r, nil
+}
+
+// run starts bin with argv in the testsuite workdir, with no shell: the result carries its stdout, its parsed JSON when
+// it is JSON, its stderr and its exit code.
+func run(ctx context.Context, bin string, argv []string) (Result, error) {
 	cmd := exec.CommandContext(ctx, bin, argv...)
-	cmd.Dir = venom.StringVarFromCtx(ctx, "venom.testsuite.workdir")
+	cmd.Dir = venom.StringVarFromCtx(ctx, workdirVar)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	r := Result{Code: "0"}
 	if err := cmd.Run(); err != nil {
 		var exit *exec.ExitError
 		if !errors.As(err, &exit) {
-			return nil, fmt.Errorf("cli: %s: %w", bin, err)
+			return Result{}, fmt.Errorf("cli: %s: %w", bin, err)
 		}
 		r.Code = strconv.Itoa(exit.ExitCode())
 	}
@@ -151,13 +171,6 @@ func (x Executor) Run(ctx context.Context, step venom.TestStep) (interface{}, er
 	var parsed interface{}
 	if err := venom.JSONUnmarshal([]byte(r.Systemout), &parsed); err == nil {
 		r.SystemoutJSON = parsed
-	}
-	if e.fixed == "" && strings.Fields(e.Action)[0] == healthAction {
-		red := Red(r.Systemout + "\n" + r.Systemerr)
-		r.Red, r.RedNew = strings.Join(red, "\n"), strings.Join(RedNew(red, e.Baseline), "\n")
-	}
-	if r.OutputFile, err = evidence.Write(ctx, e.OutputFile, r.Systemout+r.Systemerr); err != nil {
-		return nil, err
 	}
 	return r, nil
 }

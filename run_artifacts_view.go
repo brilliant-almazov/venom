@@ -142,7 +142,7 @@ func protocolStepViews(tc *TestCase) []StepView {
 	for i := range tc.TestStepResults {
 		r := &tc.TestStepResults[i]
 		number := protocolStepNumber(r, i)
-		if number > reached {
+		if number > reached && number <= len(tc.RawTestSteps) {
 			reached = number
 		}
 		m := protocolStep(r)
