@@ -40,8 +40,8 @@ any outcome and on SIGINT/SIGTERM; a failed reset stops the run. The set is done
 
 | # | Iteration | Prompt file | Depends on | Budget | Model |
 | -- | -- | -- | -- | -- | -- |
-| 1 | `--testcase` selection | `p1-01-todo-testcase-selection.md` | — | 115k tokens | sonnet |
-| 2 | `env_set` and guaranteed reset | `p1-02-todo-env-set-and-guaranteed-reset.md` | p1-01 (same `venom.go`, `README-LOCAL.md` blocks) | 209k tokens | sonnet |
+| 1 | `--testcase` selection | `p1-01-in_progress-testcase-selection.md` | — | 115k tokens | sonnet |
+| 2 | `env_set` and guaranteed reset | `p1-02-in_progress-env-set-and-guaranteed-reset.md` | p1-01 (same `venom.go`, `README-LOCAL.md` blocks) | 209k tokens | sonnet |
 | 3 | closing: forbidding test, CI read, red fixed | `p9-01-todo-closing-ci-and-forbidding-test.md` | p1-01, p1-02 | 156k tokens | opus |
 | 4 | service run: writing the set | this folder | — | 420k tokens | opus |
 | 5 | service run: audit and economics report in `retro/` | `retro/` | p9-01 | 60k tokens | opus |
