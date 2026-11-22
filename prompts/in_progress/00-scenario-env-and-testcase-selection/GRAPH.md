@@ -5,7 +5,7 @@ Set 00: ⬜⬜⬜ … 0/3 closed, 0 in progress, 3 waiting  ·  480k plan / — 
 ```
 WAVE 1                                      WAVE 2                                         WAVE 3
 
-🟡 p1-01 --testcase selection · 115k ──────► 🟡 p1-02 env_set and reset · 209k ──────────► ⬜ p9-01 closing, CI · 156k
+✅ p1-01 --testcase selection · 115k ──────► ✅ p1-02 env_set and reset · 209k ──────────► ✅ p9-01 closing, CI · 156k
 ```
 
 p1-02 follows p1-01 with no data dependency but two shared files: its "Before" blocks of `venom.go` and
