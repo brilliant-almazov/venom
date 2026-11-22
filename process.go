@@ -16,7 +16,7 @@ import (
 
 // InitLogger initializes venom logger
 func (v *Venom) InitLogger() error {
-	v.Tests.TestSuites = []TestSuite{}
+	v.Tests.TestSuites = nil
 
 	switch v.Verbose {
 	case 1:
@@ -89,6 +89,10 @@ func (v *Venom) Parse(ctx context.Context, path []string) error {
 		return err
 	}
 
+	if err := v.selectTestCases(); err != nil {
+		return err
+	}
+
 	err = v.registerUserExecutors(ctx)
 	if err != nil {
 		return errors.Wrapf(err, "unable to register user executors")
@@ -99,8 +103,8 @@ func (v *Venom) Parse(ctx context.Context, path []string) error {
 		}
 	}
 
-	missingVars := []string{}
-	extractedVars := []string{}
+	var missingVars []string
+	var extractedVars []string
 	for i := range v.Tests.TestSuites {
 		ts := &v.Tests.TestSuites[i]
 		ts.Vars.Add("venom.testsuite", ts.Name)
@@ -148,7 +152,7 @@ func (v *Venom) Parse(ctx context.Context, path []string) error {
 		return errors.Wrapf(err, "unable to parse variables")
 	}
 
-	reallyMissingVars := []string{}
+	var reallyMissingVars []string
 	for _, k := range missingVars {
 		// Skip "range" builtin variables
 		if strings.HasPrefix(k, "value") || k == "index" || k == "key" {

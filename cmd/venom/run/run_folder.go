@@ -14,14 +14,15 @@ import (
 // signalExit is the exit code of a run ended by a signal: 128 and the signal number, as a shell gives it.
 const signalExit = 128
 
-// runFolder closes the run folder of --run-dir whatever way the run ends: a signal, an error of its setup, a crash of
+// artifactsFolder closes the run folder of --run-dir whatever way the run ends: a signal, an error of its setup, a crash of
 // the runner. With no --run-dir it does nothing.
-type runFolder struct {
+type artifactsFolder struct {
 	writer *runartifacts.Writer
+	v      *venom.Venom
 }
 
 // abort closes the run folder with the reason the run ended early.
-func (f runFolder) abort(reason string) {
+func (f artifactsFolder) abort(reason string) {
 	if f.writer == nil {
 		return
 	}
@@ -32,24 +33,24 @@ func (f runFolder) abort(reason string) {
 }
 
 // fail prints err, closes the run folder with it and exits 2.
-func (f runFolder) fail(stage string, err error) {
+func (f artifactsFolder) fail(stage string, err error) {
 	fmt.Fprintf(os.Stderr, "%v\n", err)
 	f.abort(stage + ": " + err.Error())
 	venom.OSExit(2)
 }
 
-// onSignal closes the run folder when the run is interrupted (SIGINT) or terminated (SIGTERM), then exits 128 and
-// the signal number. A SIGKILL cannot be caught: the folder then holds what was written as each testcase began and ended.
-func (f runFolder) onSignal() {
-	if f.writer == nil {
-		return
-	}
-
+// onSignal ends a run interrupted (SIGINT) or terminated (SIGTERM): it brings every stand service a running testcase
+// changed back to its base values, closes the run folder, then exits 128 and the signal number. A SIGKILL cannot be
+// caught: the folder then holds what was written as each testcase began and ended.
+func (f artifactsFolder) onSignal() {
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
 
 	go func() {
 		s := <-ch
+		for _, failed := range f.v.RestoreEnv() {
+			fmt.Fprintf(os.Stderr, "base state not restored: %s\n", failed)
+		}
 		f.abort("interrupted by signal " + s.String())
 
 		code := signalExit + int(syscall.SIGINT)
@@ -63,8 +64,11 @@ func (f runFolder) onSignal() {
 }
 
 // onCrash closes the run folder when the runner panics, then lets the panic go on.
-func (f runFolder) onCrash() {
+func (f artifactsFolder) onCrash() {
 	if r := recover(); r != nil {
+		for _, failed := range f.v.RestoreEnv() {
+			fmt.Fprintf(os.Stderr, "base state not restored: %s\n", failed)
+		}
 		f.abort(fmt.Sprintf("runner crashed: panic: %v", r))
 		panic(r)
 	}
